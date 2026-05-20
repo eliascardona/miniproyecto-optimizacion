@@ -1,0 +1,11 @@
+# nodeJS dependencies must be installed manually, because of their size.
+# is not suitable to upload dependencies into GitHub repositories, as
+# it only increments the repo size, without adding extra value.
+
+# a proper management of the "package.json" file leads to
+# a stable and secure dependency management
+/node_modules
+
+# environment variables must be ignored, as they might contain
+# sensitive data, such as software secrets or execution parameters
+.env*
