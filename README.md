@@ -4,7 +4,7 @@
 
 De forma rápida deseamos introducir a este mini-proyecto de investigación con la siguiente descripción:
 
-<<COLOCAR UNA DESCRIPCIÓN CONVENIENTE AQUÍ>>
+El presente mini-proyecto de investigación e ingeniería plantea el desarrollo de una plataforma automatizada para la sintonización y optimización de filtros analógicos activos. Mediante la sinergia de dos disciplinas, el sistema acopla un Motor de Optimización basado en Algoritmos Genéticos y simulación en SPICE (desarrollado en Python) con una Infraestructura de Servidor robusta y escalable (desarrollada en Node.js y PostgreSQL). El objetivo principal es ofrecer una solución computacional eficiente que calcule de manera exacta los valores óptimos de componentes comerciales ($R$ y $C$), minimizando el error de aptitud frente a especificaciones críticas de diseño como frecuencias de corte, ganancia y ancho de banda.
 
 ## Propósito del presente repositorio de código
 
