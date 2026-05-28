@@ -1,0 +1,25 @@
+.title CIRCUIT PASAALTAS 2DO ORDEN MFB
+Vs 1000 0 AC 5
+Rs 1000 1 470
+
+* Valores de R y C modificables
+C1 1 2 1.0e-6
+C2 1002 2 6.8e-7
+
+* Configuracion del Op-Amp LM741
+Vpp Vp 0 DC 15
+Vnn Vn 0 DC -15
+XOP 0 2 Vp Vn 1002 LM741
+
+* Resistencia de carga fija del sistema
+Rl 1002 0 470
+
+.INCLUDE lm741.lib
+.AC DEC 100 1 1e8
+
+.control
+run
+wrdata datos_filtro.txt vm(1002)
+write simulation_0.raw
+.endc
+.END
