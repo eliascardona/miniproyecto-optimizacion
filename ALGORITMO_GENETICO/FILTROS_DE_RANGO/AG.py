@@ -13,20 +13,21 @@ ARCHIVO_CIR = "circuit_0.cir"
 ARCHIVO_DATOS = "datos_filtro.txt"
 
 # ============================================================
-# OBJETIVO DE DISEÑO
+# OBJETIVO DE DISEÑO (PASABANDA CON RANGO)
 # ============================================================
-FC_OBJETIVO = 1000        # 1000 Hz
-AMPLITUD_OBJETIVO = 5     # Amplitud esperada
-PENDIENTE_OBJETIVO = 40   # Pendiente buscada
+FL_OBJETIVO = 400.0         # Frecuencia de corte inferior deseada (Hz)
+FH_OBJETIVO = 600.0         # Frecuencia de corte superior deseada (Hz)
+AMPLITUD_OBJETIVO = 5.0     # Amplitud esperada en la banda de paso (V)
+PENDIENTE_OBJETIVO = 40.0   # Pendiente buscada en las bandas de atenuación (dB/dec)
 
 # ============================================================
 # PARÁMETROS DEL ALGORITMO GENÉTICO
 # ============================================================
-TAM_POBLACION = 20
-NUM_GENERACIONES = 30
-PROB_CRUCE = 0.8
-PROB_MUTACION = 0.2
-ELITISMO = 2
+TAM_POBLACION = 60          # Más individuos para la complejidad de rango
+NUM_GENERACIONES = 40       # Más generaciones para estabilizar ambos cortes
+PROB_CRUCE = 0.85
+PROB_MUTACION = 0.35
+ELITISMO = 3
 
 # ============================================================
 # SERIES COMERCIALES (E6 para Capacitores, E12 para Resistencias)
@@ -45,10 +46,9 @@ SERIE_E12 = generar_serie([1.0, 1.2, 1.5, 1.8, 2.2, 2.7, 3.3, 3.9, 4.7, 5.6, 6.8
 # PARSER DINÁMICO: DETECTA CUALQUIER R Y C, MENOS Rs Y Rl
 # ============================================================
 def extraer_componentes():
-    texto = Path(ARCHIVO_CIR).read_text()
+    texto = Path(ARCHIVO_CIR).read_text(encoding="utf-8")
     detectados = []
     
-    # Filtro estricto para ignorar resistencias fijas de fuente y carga
     fijos = ["RS", "RL", "R_S", "R_L"] 
     patron = r"^([CR][a-zA-Z0-9_]*)\s+"
     
@@ -75,7 +75,7 @@ def valor_spice(v):
     return re.sub(r'e([+-])0', r'e\1', f"{v:.1e}")
 
 def actualizar_circuito(individuo):
-    texto = Path(ARCHIVO_CIR).read_text()
+    texto = Path(ARCHIVO_CIR).read_text(encoding="utf-8")
     lineas = texto.splitlines()
     
     for i, comp in enumerate(COMPONENTES_AG):
@@ -86,89 +86,124 @@ def actualizar_circuito(individuo):
             linea_limpia = linea.strip()
             if linea_limpia.startswith(comp["nombre"]) and re.match(rf"^{comp['nombre']}\s+", linea_limpia):
                 partes = linea_limpia.split()
-                partes[-1] = nuevo_valor  # Cambia con precisión la última columna de la netlist
+                partes[-1] = nuevo_valor
                 lineas[idx] = " ".join(partes)
                 break
                 
-    Path(ARCHIVO_CIR).write_text("\n".join(lineas))
+    Path(ARCHIVO_CIR).write_text("\n".join(lineas), encoding="utf-8")
 
 def ejecutar_spice():
     resultado = subprocess.run([NGSPICE_EXE, "-b", ARCHIVO_CIR], capture_output=True, text=True)
-    if resultado.returncode != 0:
-        return False
-    return True
+    return resultado.returncode == 0
 
 # ============================================================
-# OBTENER METRICAS CON TU INTERPOLACIÓN REAL
+# OBTENER METRICAS (DOS FRECUENCIAS DE CORTE + PENDIENTE + AMP)
 # ============================================================
 def obtener_metricas():
     try:
         datos = np.loadtxt(ARCHIVO_DATOS)
-        frecuencias = datos[:, 0]
-        amplitudes = datos[:, 1]  # vm(1002) entrega directamente magnitud lineal
+        frecuencias_crudas = datos[:, 0]
+        amplitudes_crudas = np.abs(datos[:, 1])
+
+        # Ventana activa para limpiar ruido de desfasamiento
+        mascara = frecuencias_crudas >= 10
+        frecuencias = frecuencias_crudas[mascara]
+        amplitudes = amplitudes_crudas[mascara]
+
+        if len(amplitudes) == 0: return None, None, None, 0
 
         amp_max = np.max(amplitudes)
-        if amp_max <= 0: return None, None, 0
+        idx_max = np.argmax(amplitudes)
+        if amp_max <= 0: return None, None, None, 0
+        
         nivel_fc = amp_max / np.sqrt(2)
 
-        # Tu algoritmo original de interpolación lineal exacta
-        fc_real = None
-        for i in range(len(amplitudes) - 1):
-            if (amplitudes[i] <= nivel_fc <= amplitudes[i+1]) or (amplitudes[i] >= nivel_fc >= amplitudes[i+1]):
+        fl_real, fh_real = None, None
+
+        # 1. Buscar fL (Frecuencia inferior): desde el inicio hasta el pico máximo
+        for i in range(idx_max):
+            if amplitudes[i] <= nivel_fc <= amplitudes[i+1]:
                 f1, f2 = frecuencias[i], frecuencias[i+1]
                 a1, a2 = amplitudes[i], amplitudes[i+1]
-                fc_real = f1 + (nivel_fc - a1) * (f2 - f1) / (a2 - a1)
+                fl_real = f1 + (nivel_fc - a1) * (f2 - f1) / (a2 - a1)
                 break
 
-        if fc_real is None:
-            idx = np.argmin(np.abs(amplitudes - nivel_fc))
-            fc_real = frecuencias[idx]
+        # 2. Buscar fH (Frecuencia superior): desde el pico máximo hasta el final
+        for i in range(idx_max, len(amplitudes) - 1):
+            if amplitudes[i] >= nivel_fc >= amplitudes[i+1]:
+                f1, f2 = frecuencias[i], frecuencias[i+1]
+                a1, a2 = amplitudes[i], amplitudes[i+1]
+                fh_real = f1 + (nivel_fc - a1) * (f2 - f1) / (a2 - a1)
+                break
 
-        # Medición de pendiente adaptada para evitar valores asintóticos erróneos
-        f_baja = fc_real / 10.0
-        idx_fc = np.argmin(np.abs(frecuencias - fc_real))
-        idx_baja = np.argmin(np.abs(frecuencias - f_baja))
+        # Respaldos de seguridad
+        if fl_real is None and idx_max > 0:
+            idx_l = np.argmin(np.abs(amplitudes[:idx_max] - nivel_fc))
+            fl_real = frecuencias[idx_l]
+        if fh_real is None:
+            idx_h = np.argmin(np.abs(amplitudes[idx_max:] - nivel_fc)) + idx_max
+            fh_real = frecuencias[idx_h]
+
+        # Medición de pendientes (promedio de atenuación en banda baja y alta)
+        idx_fl = np.argmin(np.abs(frecuencias - fl_real))
+        idx_fh = np.argmin(np.abs(frecuencias - fh_real))
         
-        v_fc = amplitudes[idx_fc] + 1e-12
-        v_baja = amplitudes[idx_baja] + 1e-12
+        f_ref_baja = fl_real / 10.0
+        f_ref_alta = fh_real * 10.0
         
-        pend = abs(20 * np.log10(v_fc) - 20 * np.log10(v_baja))
-        
-        return float(fc_real), float(amp_max), float(pend)
-    except: 
-        return None, None, 0
+        idx_ref_baja = np.argmin(np.abs(frecuencias - f_ref_baja))
+        idx_ref_alta = np.argmin(np.abs(frecuencias - f_ref_alta))
+
+        v_fl = amplitudes[idx_fl] + 1e-12
+        v_fh = amplitudes[idx_fh] + 1e-12
+        v_ref_baja = amplitudes[idx_ref_baja] + 1e-12
+        v_ref_alta = amplitudes[idx_ref_alta] + 1e-12
+
+        pend_baja = abs(20 * np.log10(v_fl) - 20 * np.log10(v_ref_baja))
+        pend_alta = abs(20 * np.log10(v_fh) - 20 * np.log10(v_ref_alta))
+        pend_promedio = (pend_baja + pend_alta) / 2.0
+
+        return float(fl_real), float(fh_real), float(amp_max), float(pend_promedio)
+    except:
+        return None, None, None, 0
 
 # ============================================================
-# FITNESS MULTIOBJETIVO REFACTORIZADO
+# FITNESS MULTIOBJETIVO REFACTORIZADO PARA PASABANDA
 # ============================================================
 def fitness(individuo):
     try:
         actualizar_circuito(individuo)
         if not ejecutar_spice():
-            return 1e-6, None, None, 0
+            return 1e-6, None, None, None, 0
 
-        fc, amp, pend = obtener_metricas()
-        if fc is None or amp is None:
-            return 1e-6, None, None, 0
+        fl, fh, amp, pend = obtener_metricas()
+        if fl is None or fh is None or amp is None:
+            return 1e-6, None, None, None, 0
 
-        # Filtro de seguridad para evitar soluciones con banda de paso colapsada
+        # Filtro de seguridad para evitar soluciones vacías
         if amp < 0.5:
-            return 1e-6, fc, amp, pend
+            return 1e-6, fl, fh, amp, pend
 
-        f_fc = 1.0 / (1.0 + abs(fc - FC_OBJETIVO)/FC_OBJETIVO)
+        # Penalización severa si las frecuencias se cruzan
+        penalizacion = 0.0
+        if fl >= fh:
+            penalizacion = 5.0
+
+        f_fl = 1.0 / (1.0 + abs(fl - FL_OBJETIVO)/FL_OBJETIVO)
+        f_fh = 1.0 / (1.0 + abs(fh - FH_OBJETIVO)/FH_OBJETIVO)
         f_amp = 1.0 / (1.0 + abs(amp - AMPLITUD_OBJETIVO)/AMPLITUD_OBJETIVO)
         f_pend = 1.0 / (1.0 + abs(pend - PENDIENTE_OBJETIVO)/PENDIENTE_OBJETIVO)
         
-        fit_ponderado = float(f_fc * 0.3 + f_amp * 0.4 + f_pend * 0.3)
-        return fit_ponderado, fc, amp, pend
+        # Ponderación balanceada considerando ambos puntos del rango
+        fit_ponderado = float((f_fl * 0.2 + f_fh * 0.2) + f_amp * 0.3 + f_pend * 0.3) - penalizacion
+        return max(1e-6, fit_ponderado), fl, fh, amp, pend
     except:
-        return 1e-6, None, None, 0
+        return 1e-6, None, None, None, 0
 
 # ============================================================
-# MÉTODOS DEL ALGORITMO GENÉTICO REESCRITOS PARA N-COMPONENTES
+# MÉTODOS DEL ALGORITMO GENÉTICO
 # ============================================================
 def crear_individuo():
-    # Genera los índices correctos mapeando dinámicamente si es R o C
     return [random.randint(0, (len(SERIE_E12) if c["tipo"]=="R" else len(SERIE_E6))-1) for c in COMPONENTES_AG]
 
 def seleccion_torneo(poblacion, fitnesses, k=3):
@@ -185,7 +220,7 @@ def ejecutar_AG():
     
     mejor_global = None
     mejor_fit = -1.0
-    metricas_optimas = (None, None, 0)
+    metricas_optimas = (None, None, None, 0)
 
     print(f"\nIniciando evolución para {NUM_GENERACIONES} generaciones...")
 
@@ -197,34 +232,34 @@ def ejecutar_AG():
         if fitnesses[idx_best] > mejor_fit:
             mejor_fit = fitnesses[idx_best]
             mejor_global = poblacion[idx_best][:]
-            metricas_optimas = (res[idx_best][1], res[idx_best][2], res[idx_best][3])
+            metricas_optimas = (res[idx_best][1], res[idx_best][2], res[idx_best][3], res[idx_best][4])
 
-        fc_gen = res[idx_best][1]
-        amp_gen = res[idx_best][2]
-        pend_gen = res[idx_best][3]
+        fl_gen = res[idx_best][1]
+        fh_gen = res[idx_best][2]
+        amp_gen = res[idx_best][3]
+        pend_gen = res[idx_best][4]
         
-        txt_fc = f"{fc_gen:.1f}Hz" if fc_gen is not None else "Error"
+        txt_fl = f"{fl_gen:.1f}Hz" if fl_gen is not None else "Error"
+        txt_fh = f"{fh_gen:.1f}Hz" if fh_gen is not None else "Error"
         txt_amp = f"{amp_gen:.2f}V" if amp_gen is not None else "Error"
 
-        print(f"Gen {gen+1}: Fit {fitnesses[idx_best]:.4f} | fc {txt_fc} | Amp {txt_amp} | Pend {pend_gen:.1f}dB/dec")
+        print(f"Gen {gen+1:02d}: Fit {fitnesses[idx_best]:.4f} | Rango: [{txt_fl} a {txt_fh}] | Amp {txt_amp} | Pend {pend_gen:.1f}dB/dec")
 
         # Elitismo
         indices = np.argsort(fitnesses)[::-1]
-        nueva_pob = [poblacion[i][:] for i in indices[:ELITISMO]]
+        nueva_pob = [poblacion[i][:] for i in indices[:ELIMITISMO if 'ELIMITISMO' in locals() else ELITISMO]]
 
-        # Reproducción (Cruce y Mutación seguros para N-parámetros)
+        # Reproducción segura para N-parámetros
         while len(nueva_pob) < TAM_POBLACION:
             p1 = seleccion_torneo(poblacion, fitnesses)
             p2 = seleccion_torneo(poblacion, fitnesses)
             
-            # Cruzamiento por punto de corte dinámico
             if random.random() < PROB_CRUCE and NUM_PARAMETROS > 1:
                 pto = random.randint(1, NUM_PARAMETROS - 1)
                 h1, h2 = p1[:pto] + p2[pto:], p2[:pto] + p1[pto:]
             else:
                 h1, h2 = p1[:], p2[:]
             
-            # Mutación indexada individualmente según límites de su propia serie comercial
             for h in [h1, h2]:
                 for i in range(NUM_PARAMETROS):
                     if random.random() < PROB_MUTACION:
@@ -235,11 +270,11 @@ def ejecutar_AG():
 
         poblacion = nueva_pob[:TAM_POBLACION]
 
-    # Re-escribir la netlist con los valores óptimos definitivos hallados
+    # Re-escribir la netlist con la mejor solución
     actualizar_circuito(mejor_global)
     ejecutar_spice()
 
-    print("\n================ MEJOR SOLUCION FINAL ================")
+    print("\n================ MEJOR SOLUCION FINAL DE PASABANDA ================")
     componentes_json = {}
     for i, comp in enumerate(COMPONENTES_AG):
         lista = SERIE_E12 if comp["tipo"] == "R" else SERIE_E6
@@ -251,28 +286,36 @@ def ejecutar_AG():
             "serie_comercial": "E12" if comp["tipo"] == "R" else "E6"
         }
 
-    print(f"fc FINAL = {f'{metricas_optimas[0]:.2f} Hz' if metricas_optimas[0] else 'Error'}")
+    fl_final, fh_final = metricas_optimas[0], metricas_optimas[1]
+    txt_fl_f = f"{fl_final:.2f} Hz" if fl_final else "Error"
+    txt_fh_f = f"{fh_final:.2f} Hz" if fh_final else "Error"
+    print(f"Rango FINAL = [{txt_fl_f} a {txt_fh_f}]")
+    if fl_final and fh_final:
+        print(f"Ancho de Banda Real = {fh_final - fl_final:.2f} Hz")
 
-    # Exportación a JSON limpia para guardar el registro real
+    # Exportación JSON avanzada estructurada para intercambio
     ruta_json = "mejor_solucion.json"
     datos_intercambio = {
         "configuracion": {
             "archivo_netlist": ARCHIVO_CIR,
-            "frecuencia_objetivo_hz": FC_OBJETIVO,
+            "frecuencia_inferior_objetivo_hz": FL_OBJETIVO,
+            "frecuencia_superior_objetivo_hz": FH_OBJETIVO,
             "tamano_poblacion": TAM_POBLACION,
             "total_generaciones": NUM_GENERACIONES
         },
         "resultado_optimo": {
-            "frecuencia_corte_final_hz": round(metricas_optimas[0], 2) if metricas_optimas[0] else None,
-            "amplitud_maxima_v": round(metricas_optimas[1], 2) if metricas_optimas[1] else None,
-            "pendiente_db_dec": round(metricas_optimas[2], 2),
+            "fl_final_hz": round(fl_final, 2) if fl_final else None,
+            "fh_final_hz": round(fh_final, 2) if fh_final else None,
+            "ancho_banda_hz": round(fh_final - fl_final, 2) if (fh_final and fl_final) else None,
+            "amplitud_maxima_v": round(metricas_optimas[2], 2) if metricas_optimas[2] else None,
+            "pendiente_db_dec": round(metricas_optimas[3], 2),
             "fitness_final": round(mejor_fit, 4),
             "componentes": componentes_json
         }
     }
     
     Path(ruta_json).write_text(json.dumps(datos_intercambio, indent=4, ensure_ascii=False), encoding="utf-8")
-    print(f"\nArchivo de intercambio '{ruta_json}' guardado con éxito.")
+    print(f"\nArchivo de intercambio '{ruta_json}' guardado con éxito por rangos.")
 
 if __name__ == "__main__":
     ejecutar_AG()

@@ -1,0 +1,26 @@
+{
+    "configuracion": {
+        "archivo_netlist": "circuit_0.cir",
+        "frecuencia_objetivo_hz": 1000,
+        "tamano_poblacion": 30,
+        "total_generaciones": 25
+    },
+    "resultado_optimo": {
+        "frecuencia_corte_final_hz": 986.97,
+        "amplitud_maxima_v": 2.28,
+        "pendiente_db_dec": 14.47,
+        "fitness_final": 0.7384,
+        "componentes": {
+            "C1": {
+                "valor_flotante": 3.2999999999999996e-07,
+                "texto_spice": "3.3e-7",
+                "serie_comercial": "E6"
+            },
+            "C2": {
+                "valor_flotante": 6.8e-07,
+                "texto_spice": "6.8e-7",
+                "serie_comercial": "E6"
+            }
+        }
+    }
+}

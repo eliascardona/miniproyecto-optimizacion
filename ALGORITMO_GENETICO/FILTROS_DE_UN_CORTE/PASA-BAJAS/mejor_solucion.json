@@ -1,0 +1,41 @@
+{
+    "configuracion": {
+        "archivo_netlist": "circuit_0.cir",
+        "frecuencia_objetivo_hz": 1000,
+        "tamano_poblacion": 30,
+        "total_generaciones": 25
+    },
+    "resultado_optimo": {
+        "frecuencia_corte_final_hz": 1004.17,
+        "amplitud_maxima_v": 4.97,
+        "pendiente_db_dec": 39.91,
+        "fitness_final": 0.9957,
+        "componentes": {
+            "R1": {
+                "valor_flotante": 47.0,
+                "texto_spice": "4.7e+1",
+                "serie_comercial": "E12"
+            },
+            "R_fb": {
+                "valor_flotante": 47000.0,
+                "texto_spice": "4.7e+4",
+                "serie_comercial": "E12"
+            },
+            "R_out": {
+                "valor_flotante": 470.0,
+                "texto_spice": "4.7e+2",
+                "serie_comercial": "E12"
+            },
+            "C1": {
+                "valor_flotante": 6.8e-07,
+                "texto_spice": "6.8e-7",
+                "serie_comercial": "E6"
+            },
+            "C2": {
+                "valor_flotante": 2.2000000000000003e-09,
+                "texto_spice": "2.2e-9",
+                "serie_comercial": "E6"
+            }
+        }
+    }
+}

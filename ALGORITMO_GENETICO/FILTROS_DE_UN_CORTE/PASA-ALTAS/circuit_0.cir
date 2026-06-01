@@ -3,7 +3,7 @@ Vs 1000 0 AC 5
 Rs 1000 1 470
 
 * Valores de R y C modificables
-C1 1 2 1.0e-6
+C1 1 2 3.3e-7
 C2 1002 2 6.8e-7
 
 * Configuracion del Op-Amp LM741
