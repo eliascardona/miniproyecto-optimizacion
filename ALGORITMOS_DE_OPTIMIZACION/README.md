@@ -1,17 +1,17 @@
-# `config.json` — Esquema y reglas de validación de entrada (diseño de filtros)
+# config.json — Esquema y reglas de validación de entrada (diseño de filtros)
 
-Este documento describe, campo por campo, cómo debe construirse el `config.json`
+Este documento describe, campo por campo, cómo debe construirse el config.json
 que consumen los scripts de optimización de cada tipo de filtro
-(`FILTRO_PASABAJAS`, `FILTRO_PASAALTAS`, `FILTRO_PASABANDA`,
-`FILTRO_RECHAZABANDA`). Está pensado para el equipo de informática: define
+(FILTRO_PASABAJAS, FILTRO_PASAALTAS, FILTRO_PASABANDA,
+FILTRO_RECHAZABANDA). Está pensado para el equipo de informática: define
 **qué** debe validarse antes de invocar el script — no cómo implementar esa
 validación, eso queda a criterio del equipo.
 
-Esta estructura de `config.json` no depende de cuál algoritmo de
+Esta estructura de config.json no depende de cuál algoritmo de
 optimización se use para resolver el problema: la única parte del contrato
-que cambia de un algoritmo a otro es el contenido de `parametros_optimizador`
+que cambia de un algoritmo a otro es el contenido de parametros_optimizador
 (sección 6), donde cada algoritmo define su propio conjunto de claves; el
-resto del esquema (`entorno`, `barrido_ac`, `frecuencias`) es el mismo sin
+resto del esquema (entorno, barrido_ac, frecuencias) es el mismo sin
 importar el algoritmo.
 
 **Lo más importante primero:** el script de cada filtro solo captura dos
@@ -24,25 +24,25 @@ de que el JSON llegue al script.
 
 ---
 
-## 1. El `config.json` no dice qué tipo de filtro es
+## 1. El config.json no dice qué tipo de filtro es
 
-Ningún script lee un campo `"tipo"` o `"filtro"` dentro del JSON. El tipo de
+Ningún script lee un campo "tipo" o "filtro" dentro del JSON. El tipo de
 filtro (pasabajas / pasaaltas / pasabanda / rechazabanda) está implícito en
 **qué script se invoca**, no en el contenido del JSON.
 
 **Recomendación para la API:** que el endpoint (o un campo a nivel de
-*request*, fuera de este `config.json`) sea lo que decide qué script
+*request*, fuera de este config.json) sea lo que decide qué script
 invocar, y que ese dato se use únicamente para enrutar — no debería
-reenviarse dentro del `config.json` que recibe el script, porque este lo
+reenviarse dentro del config.json que recibe el script, porque este lo
 ignoraría silenciosamente (no lo lee, pero tampoco lo rechaza).
 
 ---
 
 ## 2. Esqueleto común a los 4 tipos de filtro
 
-Los 4 `config.json` comparten exactamente la misma forma general; lo único
-que cambia entre tipos de filtro (y según `modo`) es el contenido de
-`frecuencias` (sección 7).
+Los 4 config.json comparten exactamente la misma forma general; lo único
+que cambia entre tipos de filtro (y según modo) es el contenido de
+frecuencias (sección 7).
 
 ```json
 {
@@ -71,86 +71,86 @@ que cambia entre tipos de filtro (y según `modo`) es el contenido de
 }
 ```
 
-Las 5 claves raíz (`modo`, `entorno`, `barrido_ac`, `parametros_optimizador`,
-`frecuencias`) son **todas obligatorias**. Si falta cualquiera, el script
+Las 5 claves raíz (modo, entorno, barrido_ac, parametros_optimizador,
+frecuencias) son **todas obligatorias**. Si falta cualquiera, el script
 termina en una excepción no controlada.
 
-Dentro de `parametros_optimizador` y `frecuencias`, el **orden de los
-elementos del arreglo no importa** — cada valor se busca por su `"clave"`,
+Dentro de parametros_optimizador y frecuencias, el **orden de los
+elementos del arreglo no importa** — cada valor se busca por su "clave",
 no por posición. Lo que sí importa es que la clave exista exactamente con
-ese nombre (sensible a mayúsculas/minúsculas) y que tenga un `"valor"`
+ese nombre (sensible a mayúsculas/minúsculas) y que tenga un "valor"
 numérico.
 
 ---
 
-## 3. `modo`
+## 3. modo
 
 | | |
 |---|---|
-| **Tipo** | `string` |
-| **Dominio válido** | `"BASICO"` o `"AVANZADO"` (únicamente) |
+| **Tipo** | string |
+| **Dominio válido** | "BASICO" o "AVANZADO" (únicamente) |
 | **Obligatorio** | Sí |
 
 **Punto crítico para la validación de la API:** el script normaliza el
 valor recibido (quita espacios y lo pasa a mayúsculas) y luego compara
-contra `"BASICO"`; cualquier otro valor cae en `AVANZADO`. Esto significa
+contra "BASICO"; cualquier otro valor cae en AVANZADO. Esto significa
 que:
-- Es insensible a mayúsculas/minúsculas y espacios (`" basico "` y
-  `"BASICO"` son equivalentes).
-- **Cualquier valor que no sea exactamente `"BASICO"` cae en `AVANZADO` sin
-  avisar.** Un typo como `"BASCO"` o `"AVANSADO"` no truena: el script
-  simplemente exige las claves de frecuencia del modo `AVANZADO` (sección 7),
-  no las de `BASICO`. Esto puede confundir mucho a quien esté depurando.
+- Es insensible a mayúsculas/minúsculas y espacios (" basico " y
+  "BASICO" son equivalentes).
+- **Cualquier valor que no sea exactamente "BASICO" cae en AVANZADO sin
+  avisar.** Un typo como "BASCO" o "AVANSADO" no truena: el script
+  simplemente exige las claves de frecuencia del modo AVANZADO (sección 7),
+  no las de BASICO. Esto puede confundir mucho a quien esté depurando.
 
-La API debe validar el `enum` de forma estricta (rechazar cualquier valor
-que, normalizado, no sea `"BASICO"` ni `"AVANZADO"`) antes de confiar en el
+La API debe validar el enum de forma estricta (rechazar cualquier valor
+que, normalizado, no sea "BASICO" ni "AVANZADO") antes de confiar en el
 comportamiento del script.
 
 ---
 
-## 4. `entorno`
+## 4. entorno
 
 ```json
 "entorno": { "v_fuente": 5, "r_fuente": 470, "r_carga": 470 }
 ```
 
-Las 3 claves (`v_fuente`, `r_fuente`, `r_carga`) son obligatorias; el script
+Las 3 claves (v_fuente, r_fuente, r_carga) son obligatorias; el script
 las indexa directamente, así que cualquiera ausente provoca un error.
 
-### 4.1 `v_fuente`
+### 4.1 v_fuente
 
 | | |
 |---|---|
-| **Tipo** | `number` (entero o decimal) |
-| **Regla dura** | **Estrictamente `> 0`** |
-| **Recomendado** | `0 < v_fuente ≤ 10` (ver nota) |
+| **Tipo** | number (entero o decimal) |
+| **Regla dura** | **Estrictamente > 0** |
+| **Recomendado** | 0 < v_fuente ≤ 10 (ver nota) |
 
-`v_fuente` es la amplitud (V) de la fuente AC. Si vale `0`, el script
+v_fuente es la amplitud (V) de la fuente AC. Si vale 0, el script
 **truena por división entre cero**: el voltaje objetivo de la banda de paso
-se deriva de `v_fuente`, y varias fórmulas internas dividen entre ese valor.
+se deriva de v_fuente, y varias fórmulas internas dividen entre ese valor.
 
 La alimentación del amplificador operacional se deriva automáticamente como
-`Vpp = v_fuente + 10` y `Vnn = -(v_fuente + 10)`. Esto no está limitado en
+Vpp = v_fuente + 10 y Vnn = -(v_fuente + 10). Esto no está limitado en
 el código, pero el modelo de amplificador usado en la simulación (LM741)
 tiene un rango de alimentación recomendado de fábrica de ±5 V a ±15 V
-(máximo absoluto ±22 V). Topar `v_fuente` en 10 V deja `Vpp`/`Vnn` en ±20 V:
+(máximo absoluto ±22 V). Topar v_fuente en 10 V deja Vpp/Vnn en ±20 V:
 todavía dentro del máximo absoluto del LM741, aunque ya por encima de su
 rango recomendado de operación de fábrica. Esto **no lo exige el script**;
 es el tope que se adopta para este contrato.
 
-### 4.2 `r_fuente` y `r_carga`
+### 4.2 r_fuente y r_carga
 
 | | |
 |---|---|
-| **Tipo** | `number` (entero o decimal) |
-| **Regla dura** | `> 0` |
+| **Tipo** | number (entero o decimal) |
+| **Regla dura** | > 0 |
 | **Regla solicitada** | Debe pertenecer a la **serie E12** |
 
-Son la resistencia de fuente (`Rs`) y de carga (`Rl`) del circuito. El
+Son la resistencia de fuente (Rs) y de carga (Rl) del circuito. El
 script no valida que pertenezcan a una serie comercial (acepta cualquier
-`número > 0` sin quejarse), pero la serie E12 ya es la que se usa
+número > 0 sin quejarse), pero la serie E12 ya es la que se usa
 internamente para generar **todas las resistencias del circuito que sí se
-optimizan**, así que pedir lo mismo para `r_fuente`/`r_carga` mantiene
+optimizan**, así que pedir lo mismo para r_fuente/r_carga mantiene
 consistencia con el resto del diseño.
 
 **Definición de la serie E12:**
@@ -161,18 +161,18 @@ mantisa ∈ {1.0, 1.2, 1.5, 1.8, 2.2, 2.7, 3.3, 3.9, 4.7, 5.6, 6.8, 8.2}
 n ∈ ℤ   (década, p. ej. n=2 → ×100, n=3 → ×1000)
 ```
 
-Rango de décadas recomendado: `n ∈ {1, 2, 3, 4, 5}` → de **10 Ω a 820 000 Ω**,
+Rango de décadas recomendado: n ∈ {1, 2, 3, 4, 5} → de **10 Ω a 820 000 Ω**,
 que es el mismo rango que se usa internamente para las resistencias que sí
-se optimizan dentro del circuito. Mantener `r_fuente`/`r_carga` en ese mismo
+se optimizan dentro del circuito. Mantener r_fuente/r_carga en ese mismo
 orden de magnitud evita combinaciones de impedancia poco realistas para las
 topologías usadas en estos filtros.
 
-Ejemplos válidos: `10, 22, 100, 470, 1000, 2200, 4700, 10000, 33000, 820000`.
-Ejemplos **inválidos**: `500` (no es mantisa E12 × década), `300`, `750`.
+Ejemplos válidos: 10, 22, 100, 470, 1000, 2200, 4700, 10000, 33000, 820000.
+Ejemplos **inválidos**: 500 (no es mantisa E12 × década), 300, 750.
 
 ---
 
-## 5. `barrido_ac`
+## 5. barrido_ac
 
 ```json
 "barrido_ac": { "f_inicial": 100, "f_final": 100000 }
@@ -182,53 +182,53 @@ Estas dos frecuencias (Hz) definen el rango del barrido de la simulación.
 
 | Campo | Tipo | Regla |
 |---|---|---|
-| `f_inicial` | `integer` | `> 0` |
-| `f_final` | `integer` | `≤ 10 000 000` |
-| (relación) | — | `f_inicial < f_final` (estricto) |
+| f_inicial | integer | > 0 |
+| f_final | integer | ≤ 10 000 000 |
+| (relación) | — | f_inicial < f_final (estricto) |
 
 - El script internamente castea ambos valores a decimal, así que
   técnicamente toleraría valores no enteros; **se exige entero como regla de
   contrato de la API**, no porque el script lo necesite.
-- `f_final ≤ 10 000 000` es el tope solicitado para este contrato; el script
+- f_final ≤ 10 000 000 es el tope solicitado para este contrato; el script
   no lo valida, así que debe aplicarse en la API.
-- Si `f_inicial >= f_final`, el barrido queda invertido o de ancho cero, y
+- Si f_inicial >= f_final, el barrido queda invertido o de ancho cero, y
   la simulación puede comportarse de forma indefinida. Validar
-  `f_inicial < f_final` siempre.
+  f_inicial < f_final siempre.
 
 ### 5.1 Regla recomendada: frecuencias "redondas" (por décadas)
 
-Se puede (opcionalmente) restringir `f_inicial`/`f_final` a valores con **un
+Se puede (opcionalmente) restringir f_inicial/f_final a valores con **un
 solo dígito significativo seguido de ceros**:
 
 ```
 f = d × 10ⁿ ,   d ∈ {1, 2, ..., 9},   n ∈ {0, 1, 2, ...}
 ```
 
-Bajo esta regla, un valor como `37` no sería válido: el sistema debería
-ofrecer/aceptar el más cercano por abajo (`30`) o por arriba (`40`), no `37`
-directamente. Valores válidos: `1, 2, …, 9, 10, 20, …, 90, 100, 200, …,
-10000000`.
+Bajo esta regla, un valor como 37 no sería válido: el sistema debería
+ofrecer/aceptar el más cercano por abajo (30) o por arriba (40), no 37
+directamente. Valores válidos: 1, 2, …, 9, 10, 20, …, 90, 100, 200, …,
+10000000.
 
 Esto **no lo exige el script**, pero conviene adoptarlo porque:
 1. Es coherente con un barrido que avanza por décadas.
-2. Los `config.json` de ejemplo del proyecto ya siguen esta convención sin
-   excepción (`1`, `100`, `100000`, etc., todos son un dígito seguido de
+2. Los config.json de ejemplo del proyecto ya siguen esta convención sin
+   excepción (1, 100, 100000, etc., todos son un dígito seguido de
    ceros) — es el patrón real que ya se usa.
 3. Simplifica la UI de la futura API (p. ej. un selector de "dígito 1-9" +
    "década").
 
 **Nota:** esta misma convención conviene aplicarla a *todas* las
-frecuencias del JSON, no solo a `f_inicial`/`f_final` — ver sección 7.6,
-donde se muestra que `f_paso`, `f_aten`, `f_aten_1`, etc. de los ejemplos
+frecuencias del JSON, no solo a f_inicial/f_final — ver sección 7.6,
+donde se muestra que f_paso, f_aten, f_aten_1, etc. de los ejemplos
 también la cumplen.
 
 ### 5.2 Margen mínimo de una década entre el barrido y las frecuencias de interés
 
-No basta con que las frecuencias de interés (`fc_objetivo`, `f_paso`,
-`f_aten`, etc., sección 7) caigan dentro de `(f_inicial, f_final)`: la más
+No basta con que las frecuencias de interés (fc_objetivo, f_paso,
+f_aten, etc., sección 7) caigan dentro de (f_inicial, f_final): la más
 baja del conjunto debe quedar **al menos una década por encima de
-`f_inicial`**, y la más alta **al menos una década por debajo de
-`f_final`**:
+f_inicial**, y la más alta **al menos una década por debajo de
+f_final**:
 
 ```
 frecuencia_más_baja  ≥ f_inicial × 10
@@ -240,21 +240,21 @@ está en las subsecciones de la sección 7).
 
 Esto es necesario para que el cálculo de la pendiente entre bandas sea
 confiable: ese cálculo toma como referencia un punto ubicado una década más
-allá de la frecuencia de interés (en modo `BASICO` esto es explícito: la
-pendiente se mide en `frecuencia_objetivo × 10` o `÷ 10`, según el filtro).
+allá de la frecuencia de interés (en modo BASICO esto es explícito: la
+pendiente se mide en frecuencia_objetivo × 10 o ÷ 10, según el filtro).
 Si la frecuencia de interés no tiene esa década de margen dentro del
 barrido, ese punto de referencia queda fuera del rango simulado y el
 cálculo deja de ser representativo.
 
 ---
 
-## 6. `parametros_optimizador`
+## 6. parametros_optimizador
 
-Arreglo de pares `{clave, valor}` con los hiperparámetros propios del
+Arreglo de pares {clave, valor} con los hiperparámetros propios del
 algoritmo de optimización que se esté usando. El contenido exacto de este
 arreglo depende de cuál sea ese algoritmo: cada algoritmo se documenta en
 esta sección con su propio subtítulo y su propio listado de claves, sin
-afectar el resto del contrato (`entorno`, `barrido_ac`, `frecuencias` son
+afectar el resto del contrato (entorno, barrido_ac, frecuencias son
 independientes del algoritmo elegido).
 
 ### Algoritmo Genético (AG)
@@ -263,19 +263,19 @@ Claves obligatorias (deben llamarse exactamente así):
 
 | Clave | Tipo | Regla dura |
 |---|---|---|
-| `tam_poblacion` | `integer` | `≥ 1` — bloqueante: en `0`, el AG no tiene de dónde elegir el mejor individuo y termina en error |
-| `num_generaciones` | `integer` | `≥ 1` — bloqueante: en `0`, no queda ningún individuo evaluado que guardar al final |
-| `prob_cruce` | `number` | entre `0` y `1` — no bloqueante fuera de ese rango, pero deja de ser una probabilidad válida |
-| `prob_mutacion` | `number` | entre `0` y `1` — no bloqueante, mismo caso |
-| `elitismo` | `integer` | `0 ≤ elitismo < tam_poblacion` — no bloqueante, pero si `elitismo ≥ tam_poblacion` la población deja de evolucionar (ver abajo) |
-| `torneo_k` | `integer` | `≥ 1` — bloqueante: en `0` o negativo, la selección de padres termina en error |
+| tam_poblacion | integer | ≥ 1 — bloqueante: en 0, el AG no tiene de dónde elegir el mejor individuo y termina en error |
+| num_generaciones | integer | ≥ 1 — bloqueante: en 0, no queda ningún individuo evaluado que guardar al final |
+| prob_cruce | number | entre 0 y 1 — no bloqueante fuera de ese rango, pero deja de ser una probabilidad válida |
+| prob_mutacion | number | entre 0 y 1 — no bloqueante, mismo caso |
+| elitismo | integer | 0 ≤ elitismo < tam_poblacion — no bloqueante, pero si elitismo ≥ tam_poblacion la población deja de evolucionar (ver abajo) |
+| torneo_k | integer | ≥ 1 — bloqueante: en 0 o negativo, la selección de padres termina en error |
 
 **Valores ideales y por qué** (los circuitos de este proyecto tienen entre 6
 y 8 componentes a optimizar, cada uno elegido de una lista de 24 a 60
 valores comerciales posibles — esa escala es la referencia para los rangos
 de abajo):
 
-- **`tam_poblacion`** — ideal entre 20 y 50. Una población más grande
+- **tam_poblacion** — ideal entre 20 y 50. Una población más grande
   explora más combinaciones por generación y reduce el riesgo de quedarse
   en un óptimo local, pero cada individuo nuevo implica correr una
   simulación completa del circuito, así que poblaciones muy grandes vuelven
@@ -283,14 +283,14 @@ de abajo):
   la convergencia es rápida pero con alto riesgo de estancarse en una
   solución mediocre por falta de diversidad.
 
-- **`num_generaciones`** — ideal entre 30 y 50. Cada generación nueva solo
+- **num_generaciones** — ideal entre 30 y 50. Cada generación nueva solo
   mejora si el cruce y la mutación todavía encuentran combinaciones
   mejores; pasado cierto punto la población ya convergió y generaciones
   adicionales solo añaden tiempo de cómputo sin cambios apreciables en el
   resultado. Por debajo de ~15-20 generaciones, la búsqueda suele cortarse
   antes de que el algoritmo tenga oportunidad de refinar la solución.
 
-- **`prob_cruce`** — ideal entre 0.7 y 0.9. El cruce combina las partes
+- **prob_cruce** — ideal entre 0.7 y 0.9. El cruce combina las partes
   buenas que ya encontraron distintos individuos (por ejemplo, una etapa
   bien ajustada de un padre con otra etapa bien ajustada de otro padre); con
   una probabilidad alta, casi todas las parejas seleccionadas se cruzan en
@@ -299,7 +299,7 @@ de abajo):
   búsqueda pasa a depender casi solo de la mutación, lo que la hace más
   lenta.
 
-- **`prob_mutacion`** — ideal entre 0.2 y 0.35 (más alto que la
+- **prob_mutacion** — ideal entre 0.2 y 0.35 (más alto que la
   recomendación típica de los libros de texto sobre AG, por la razón
   siguiente). Aquí cada "gen" no es un bit ni un número continuo, sino el
   índice de un componente dentro de una lista corta de valores comerciales
@@ -313,44 +313,44 @@ de abajo):
   aprovechar lo que el cruce ya combinó y se comporta más como búsqueda
   aleatoria.
 
-- **`elitismo`** — ideal entre 2 y 4 individuos, o aproximadamente 5-10 %
-  de `tam_poblacion`. Garantiza que el mejor individuo encontrado hasta el
+- **elitismo** — ideal entre 2 y 4 individuos, o aproximadamente 5-10 %
+  de tam_poblacion. Garantiza que el mejor individuo encontrado hasta el
   momento no se pierda por una mala combinación de cruce/mutación en la
   siguiente generación; sin nada de elitismo, es posible retroceder en la
   calidad del mejor resultado de una generación a otra. Si se reserva una
   porción muy grande de la población como elite, queda menos espacio para
   generar individuos nuevos y la búsqueda explora menos.
 
-- **`torneo_k`** — ideal entre 2 y 5, o aproximadamente 10 % de
-  `tam_poblacion`. Define cuánta presión selectiva hay para elegir a los
-  padres: con un torneo pequeño (`k=2`), incluso un individuo mediocre
+- **torneo_k** — ideal entre 2 y 5, o aproximadamente 10 % de
+  tam_poblacion. Define cuánta presión selectiva hay para elegir a los
+  padres: con un torneo pequeño (k=2), incluso un individuo mediocre
   tiene una probabilidad razonable de ser elegido como padre, lo que
   mantiene diversidad pero hace la convergencia más lenta. Con un torneo
-  grande (`k` cercano a `tam_poblacion`), casi siempre gana el mejor
+  grande (k cercano a tam_poblacion), casi siempre gana el mejor
   individuo de toda la población, lo que acelera la convergencia pero puede
   converger demasiado rápido a una sola solución y perder la oportunidad de
   explorar otras combinaciones.
 
 ---
 
-## 7. `frecuencias` — varía según tipo de filtro y `modo`
+## 7. frecuencias — varía según tipo de filtro y modo
 
 Esta es la única sección cuyo **esquema cambia** según (a) qué tipo de
-filtro se está configurando y (b) el valor de `modo`. Las claves se buscan
+filtro se está configurando y (b) el valor de modo. Las claves se buscan
 por nombre, así que una clave de más no rompe nada, pero una clave faltante
 sí provoca un error.
 
 ### 7.1 Tabla resumen
 
-| Filtro | `modo: BASICO` (claves) | Orden exigido | `modo: AVANZADO` (claves) | Orden exigido |
+| Filtro | modo: BASICO (claves) | Orden exigido | modo: AVANZADO (claves) | Orden exigido |
 |---|---|---|---|---|
-| **PASABAJAS** | `fc_objetivo` | — (única frecuencia) | `f_paso`, `f_aten` | `f_paso < f_aten` |
-| **PASAALTAS** | `fc_objetivo` | — (única frecuencia) | `f_aten`, `f_paso` | `f_aten < f_paso` (orden **invertido** vs. pasabajas) |
-| **PASABANDA** | `fc_inferior`, `fc_superior` | `fc_inferior < fc_superior` | `f_aten_1`, `f_paso_1`, `f_paso_2`, `f_aten_2` | `f_aten_1 < f_paso_1 ≤ f_paso_2 < f_aten_2` |
-| **RECHAZABANDA** | `fc_inferior`, `fc_superior` | `fc_inferior < fc_superior` | `f_aten_1`, `f_paso_1`, `f_paso_2`, `f_aten_2` | `f_paso_1 < f_aten_1 ≤ f_aten_2 < f_paso_2` |
+| **PASABAJAS** | fc_objetivo | — (única frecuencia) | f_paso, f_aten | f_paso < f_aten |
+| **PASAALTAS** | fc_objetivo | — (única frecuencia) | f_aten, f_paso | f_aten < f_paso (orden **invertido** vs. pasabajas) |
+| **PASABANDA** | fc_inferior, fc_superior | fc_inferior < fc_superior | f_aten_1, f_paso_1, f_paso_2, f_aten_2 | f_aten_1 < f_paso_1 ≤ f_paso_2 < f_aten_2 |
+| **RECHAZABANDA** | fc_inferior, fc_superior | fc_inferior < fc_superior | f_aten_1, f_paso_1, f_paso_2, f_aten_2 | f_paso_1 < f_aten_1 ≤ f_aten_2 < f_paso_2 |
 
-**Importante:** `PASABANDA` y `RECHAZABANDA` en modo `AVANZADO` usan **las
-mismas 4 claves** (`f_aten_1`, `f_paso_1`, `f_paso_2`, `f_aten_2`), pero con
+**Importante:** PASABANDA y RECHAZABANDA en modo AVANZADO usan **las
+mismas 4 claves** (f_aten_1, f_paso_1, f_paso_2, f_aten_2), pero con
 **un orden numérico distinto e inverso entre sí**. Si la API comparte código
 de validación entre ambos filtros, debe parametrizar el orden esperado por
 tipo de filtro — copiar y pegar la validación de uno al otro produce
@@ -359,8 +359,8 @@ de rechazo" mal ubicada).
 
 Además del orden entre sí, cada combinación de filtro+modo tiene que
 cumplir el margen mínimo de una década respecto al barrido (sección 5.2):
-la clave más baja del conjunto debe ser `≥ f_inicial × 10`, y la más alta
-`≤ f_final / 10`. El detalle por filtro está en las subsecciones 7.2 a 7.5.
+la clave más baja del conjunto debe ser ≥ f_inicial × 10, y la más alta
+≤ f_final / 10. El detalle por filtro está en las subsecciones 7.2 a 7.5.
 
 ### 7.2 PASABAJAS
 
@@ -374,14 +374,14 @@ la clave más baja del conjunto debe ser `≥ f_inicial × 10`, y la más alta
   { "clave": "f_aten", "valor": 10000 }
 ]
 ```
-En modo `BASICO`, `fc_objetivo` es a la vez la frecuencia más baja y la más
+En modo BASICO, fc_objetivo es a la vez la frecuencia más baja y la más
 alta del conjunto, así que debe cumplir ambos extremos del margen:
-`fc_objetivo ≥ f_inicial × 10` y `fc_objetivo ≤ f_final / 10`.
+fc_objetivo ≥ f_inicial × 10 y fc_objetivo ≤ f_final / 10.
 
-En modo `AVANZADO`, `f_paso` = frecuencia donde se espera amplitud máxima
-(banda de paso, baja frecuencia) y `f_aten` = frecuencia donde se espera
-amplitud ≈ 0 (banda de atenuación, alta frecuencia). Regla: **`f_paso <
-f_aten`**, con `f_paso ≥ f_inicial × 10` y `f_aten ≤ f_final / 10`.
+En modo AVANZADO, f_paso = frecuencia donde se espera amplitud máxima
+(banda de paso, baja frecuencia) y f_aten = frecuencia donde se espera
+amplitud ≈ 0 (banda de atenuación, alta frecuencia). Regla: **f_paso <
+f_aten**, con f_paso ≥ f_inicial × 10 y f_aten ≤ f_final / 10.
 
 ### 7.3 PASAALTAS
 
@@ -395,12 +395,12 @@ f_aten`**, con `f_paso ≥ f_inicial × 10` y `f_aten ≤ f_final / 10`.
   { "clave": "f_paso", "valor": 10000 }
 ]
 ```
-En modo `BASICO`, `fc_objetivo` debe cumplir igualmente
-`fc_objetivo ≥ f_inicial × 10` y `fc_objetivo ≤ f_final / 10`.
+En modo BASICO, fc_objetivo debe cumplir igualmente
+fc_objetivo ≥ f_inicial × 10 y fc_objetivo ≤ f_final / 10.
 
-En modo `AVANZADO` es el espejo del pasabajas: aquí la banda de paso está
-en **alta** frecuencia. Regla: **`f_aten < f_paso`** (orden invertido
-respecto al pasabajas), con `f_aten ≥ f_inicial × 10` y `f_paso ≤ f_final / 10`.
+En modo AVANZADO es el espejo del pasabajas: aquí la banda de paso está
+en **alta** frecuencia. Regla: **f_aten < f_paso** (orden invertido
+respecto al pasabajas), con f_aten ≥ f_inicial × 10 y f_paso ≤ f_final / 10.
 
 ### 7.4 PASABANDA
 
@@ -419,19 +419,19 @@ respecto al pasabajas), con `f_aten ≥ f_inicial × 10` y `f_paso ≤ f_final /
   { "clave": "f_aten_2", "valor": 10000 }
 ]
 ```
-En modo `BASICO`: `fc_inferior ≥ f_inicial × 10`, `fc_superior ≤ f_final / 10`,
-además de `fc_inferior < fc_superior`.
+En modo BASICO: fc_inferior ≥ f_inicial × 10, fc_superior ≤ f_final / 10,
+además de fc_inferior < fc_superior.
 
-En modo `AVANZADO`, de menor a mayor frecuencia: atenuación inferior →
-inicio de paso → fin de paso → atenuación superior. Regla: **`f_aten_1 <
-f_paso_1 ≤ f_paso_2 < f_aten_2`**, con `f_aten_1 ≥ f_inicial × 10` y
-`f_aten_2 ≤ f_final / 10`.
+En modo AVANZADO, de menor a mayor frecuencia: atenuación inferior →
+inicio de paso → fin de paso → atenuación superior. Regla: **f_aten_1 <
+f_paso_1 ≤ f_paso_2 < f_aten_2**, con f_aten_1 ≥ f_inicial × 10 y
+f_aten_2 ≤ f_final / 10.
 
-La comparación entre `f_paso_1` y `f_paso_2` **no es estricta**: puede
+La comparación entre f_paso_1 y f_paso_2 **no es estricta**: puede
 haber casos donde la banda de paso se reduzca a un solo punto (un único
-pico de paso) en vez de un rango, por lo que `f_paso_1 == f_paso_2` es
-válido. Las fronteras con la banda de atenuación (`f_aten_1 < f_paso_1` y
-`f_paso_2 < f_aten_2`) sí son frecuencias de corte y deben seguir siendo
+pico de paso) en vez de un rango, por lo que f_paso_1 == f_paso_2 es
+válido. Las fronteras con la banda de atenuación (f_aten_1 < f_paso_1 y
+f_paso_2 < f_aten_2) sí son frecuencias de corte y deben seguir siendo
 **estrictas**.
 
 ### 7.5 RECHAZABANDA
@@ -451,29 +451,29 @@ válido. Las fronteras con la banda de atenuación (`f_aten_1 < f_paso_1` y
   { "clave": "f_paso_2", "valor": 10000 }
 ]
 ```
-En modo `BASICO`: igual que pasabanda, `fc_inferior ≥ f_inicial × 10`,
-`fc_superior ≤ f_final / 10`, además de `fc_inferior < fc_superior`.
+En modo BASICO: igual que pasabanda, fc_inferior ≥ f_inicial × 10,
+fc_superior ≤ f_final / 10, además de fc_inferior < fc_superior.
 
-En modo `AVANZADO`, aquí la atenuación (la "muesca") queda en el **centro**
+En modo AVANZADO, aquí la atenuación (la "muesca") queda en el **centro**
 y el paso en los extremos — orden invertido respecto al pasabanda. Regla:
-**`f_paso_1 < f_aten_1 ≤ f_aten_2 < f_paso_2`**, con `f_paso_1 ≥ f_inicial × 10`
-y `f_paso_2 ≤ f_final / 10`.
+**f_paso_1 < f_aten_1 ≤ f_aten_2 < f_paso_2**, con f_paso_1 ≥ f_inicial × 10
+y f_paso_2 ≤ f_final / 10.
 
-La comparación entre `f_aten_1` y `f_aten_2` **no es estricta**: puede
+La comparación entre f_aten_1 y f_aten_2 **no es estricta**: puede
 haber casos donde la banda de rechazo se reduzca a un solo punto (una
-muesca puntual) en vez de un rango, por lo que `f_aten_1 == f_aten_2` es
-válido. Las fronteras con la banda de paso (`f_paso_1 < f_aten_1` y
-`f_aten_2 < f_paso_2`) sí son frecuencias de corte y deben seguir siendo
+muesca puntual) en vez de un rango, por lo que f_aten_1 == f_aten_2 es
+válido. Las fronteras con la banda de paso (f_paso_1 < f_aten_1 y
+f_aten_2 < f_paso_2) sí son frecuencias de corte y deben seguir siendo
 **estrictas**.
 
 ### 7.6 La regla de "frecuencia redonda" también aplica aquí
 
-Los `config.json` de ejemplo del proyecto muestran que **todas** las
-frecuencias de esta sección —no solo `f_inicial`/`f_final`— ya siguen la
-convención de un solo dígito significativo seguido de ceros (`10, 100, 500,
-1000, 10000`, etc.). Se recomienda aplicar la misma regla de la sección 5.1
-a `fc_objetivo`, `fc_inferior`, `fc_superior`, `f_paso`, `f_aten`,
-`f_paso_1`, `f_aten_1`, `f_paso_2` y `f_aten_2`.
+Los config.json de ejemplo del proyecto muestran que **todas** las
+frecuencias de esta sección —no solo f_inicial/f_final— ya siguen la
+convención de un solo dígito significativo seguido de ceros (10, 100, 500,
+1000, 10000, etc.). Se recomienda aplicar la misma regla de la sección 5.1
+a fc_objetivo, fc_inferior, fc_superior, f_paso, f_aten,
+f_paso_1, f_aten_1, f_paso_2 y f_aten_2.
 
 ---
 
@@ -482,8 +482,8 @@ a `fc_objetivo`, `fc_inferior`, `fc_superior`, `f_paso`, `f_aten`,
 Conviene distinguir dos niveles de validación al implementar esto en la API:
 
 **Validación de forma** (tipo de dato, presencia de la clave, enumeraciones,
-mínimos/máximos fijos): todo lo descrito en las secciones 3 a 6 — `modo`,
-`entorno`, `barrido_ac`, y las claves esperadas en `parametros_optimizador`
+mínimos/máximos fijos): todo lo descrito en las secciones 3 a 6 — modo,
+entorno, barrido_ac, y las claves esperadas en parametros_optimizador
 — se puede comprobar con las herramientas de validación de esquemas que ya
 use el equipo. No depende de qué tipo de filtro sea ni de qué algoritmo de
 optimización se vaya a usar.
@@ -492,21 +492,21 @@ optimización se vaya a usar.
 reduce a un tipo o un rango por campo, así que necesita lógica propia en la
 API:
 - El orden entre las frecuencias de la sección 7 (varía por tipo de filtro
-  y por `modo`; ver tabla 7.1). En `PASABANDA` y `RECHAZABANDA` modo
-  `AVANZADO`, la comparación interna entre las dos frecuencias de la misma
-  banda (`f_paso_1`/`f_paso_2` en pasabanda, `f_aten_1`/`f_aten_2` en
-  rechazabanda) es de **menor o igual** (`≤`), no estricta, porque esa
+  y por modo; ver tabla 7.1). En PASABANDA y RECHAZABANDA modo
+  AVANZADO, la comparación interna entre las dos frecuencias de la misma
+  banda (f_paso_1/f_paso_2 en pasabanda, f_aten_1/f_aten_2 en
+  rechazabanda) es de **menor o igual** (≤), no estricta, porque esa
   banda puede colapsar a un solo punto; las fronteras entre banda de paso y
   banda de atenuación, al ser frecuencias de corte, siguen siendo
-  estrictas (`<`).
+  estrictas (<).
 - El margen mínimo de una década entre las frecuencias de interés y
-  `f_inicial`/`f_final` (sección 5.2).
-- Que `r_fuente`/`r_carga` pertenezcan a la serie E12 (fórmula en la
+  f_inicial/f_final (sección 5.2).
+- Que r_fuente/r_carga pertenezcan a la serie E12 (fórmula en la
   sección 4.2).
-- Que `f_inicial < f_final` y que `elitismo < tam_poblacion`.
+- Que f_inicial < f_final y que elitismo < tam_poblacion.
 
 Esta segunda capa conviene parametrizarla por tipo de filtro y, en el caso
-de `parametros_optimizador`, por el algoritmo de optimización seleccionado
+de parametros_optimizador, por el algoritmo de optimización seleccionado
 — en vez de escribirla una vez y reutilizarla tal cual para los 4 filtros
 (ver la advertencia de la sección 7.1).
 
@@ -516,25 +516,25 @@ de `parametros_optimizador`, por el algoritmo de optimización seleccionado
 
 | Campo | Tipo | Obligatorio | Dominio / regla | Origen de la regla |
 |---|---|---|---|---|
-| `modo` | string | sí | `"BASICO"` \| `"AVANZADO"` (enum estricto) | contrato de API (el script no valida el enum) |
-| `entorno.v_fuente` | number | sí | `> 0`; recomendado `≤ 10` | `>0` obligatorio; `≤10` recomendación adoptada |
-| `entorno.r_fuente` | number | sí | `> 0`; serie E12 | `>0` sentido físico; E12 solicitado |
-| `entorno.r_carga` | number | sí | `> 0`; serie E12 | igual que `r_fuente` |
-| `barrido_ac.f_inicial` | integer | sí | `> 0`; `< f_final`; recomendado 1 dígito sig. × 10ⁿ | contrato API; redondeo recomendado |
-| `barrido_ac.f_final` | integer | sí | `≤ 10 000 000`; `> f_inicial`; recomendado 1 dígito sig. × 10ⁿ | contrato API; redondeo recomendado |
-| `parametros_optimizador.tam_poblacion` *(Algoritmo Genético)* | integer | sí | `≥ 1` (obligatorio); ideal 20-50 | algoritmo + recomendación |
-| `parametros_optimizador.num_generaciones` *(Algoritmo Genético)* | integer | sí | `≥ 1` (obligatorio); ideal 30-50 | algoritmo + recomendación |
-| `parametros_optimizador.prob_cruce` *(Algoritmo Genético)* | number | sí | `[0, 1]`; ideal 0.7-0.9 | dominio matemático de una probabilidad |
-| `parametros_optimizador.prob_mutacion` *(Algoritmo Genético)* | number | sí | `[0, 1]`; ideal 0.2-0.35 | dominio matemático + recomendación |
-| `parametros_optimizador.elitismo` *(Algoritmo Genético)* | integer | sí | `0 ≤ elitismo < tam_poblacion`; ideal 2-4 | algoritmo (si no, deja de evolucionar) |
-| `parametros_optimizador.torneo_k` *(Algoritmo Genético)* | integer | sí | `≥ 1` (obligatorio); ideal 2-5 | algoritmo |
-| `frecuencias.*` | number | depende de tipo+modo (sección 7) | margen mínimo de una década respecto a `f_inicial`/`f_final`; orden según tabla 7.1; recomendado 1 dígito sig. × 10ⁿ | claves obligatorias + recomendación (rango/orden/redondeo) |
+| modo | string | sí | "BASICO" \| "AVANZADO" (enum estricto) | contrato de API (el script no valida el enum) |
+| entorno.v_fuente | number | sí | > 0; recomendado ≤ 10 | >0 obligatorio; ≤10 recomendación adoptada |
+| entorno.r_fuente | number | sí | > 0; serie E12 | >0 sentido físico; E12 solicitado |
+| entorno.r_carga | number | sí | > 0; serie E12 | igual que r_fuente |
+| barrido_ac.f_inicial | integer | sí | > 0; < f_final; recomendado 1 dígito sig. × 10ⁿ | contrato API; redondeo recomendado |
+| barrido_ac.f_final | integer | sí | ≤ 10 000 000; > f_inicial; recomendado 1 dígito sig. × 10ⁿ | contrato API; redondeo recomendado |
+| parametros_optimizador.tam_poblacion *(Algoritmo Genético)* | integer | sí | ≥ 1 (obligatorio); ideal 20-50 | algoritmo + recomendación |
+| parametros_optimizador.num_generaciones *(Algoritmo Genético)* | integer | sí | ≥ 1 (obligatorio); ideal 30-50 | algoritmo + recomendación |
+| parametros_optimizador.prob_cruce *(Algoritmo Genético)* | number | sí | [0, 1]; ideal 0.7-0.9 | dominio matemático de una probabilidad |
+| parametros_optimizador.prob_mutacion *(Algoritmo Genético)* | number | sí | [0, 1]; ideal 0.2-0.35 | dominio matemático + recomendación |
+| parametros_optimizador.elitismo *(Algoritmo Genético)* | integer | sí | 0 ≤ elitismo < tam_poblacion; ideal 2-4 | algoritmo (si no, deja de evolucionar) |
+| parametros_optimizador.torneo_k *(Algoritmo Genético)* | integer | sí | ≥ 1 (obligatorio); ideal 2-5 | algoritmo |
+| frecuencias.* | number | depende de tipo+modo (sección 7) | margen mínimo de una década respecto a f_inicial/f_final; orden según tabla 7.1; recomendado 1 dígito sig. × 10ⁿ | claves obligatorias + recomendación (rango/orden/redondeo) |
 
 ---
 
 ## 10. Recomendaciones adicionales para el diseño de la API
 
-1. **No reenviar claves desconocidas** al `config.json` final (p. ej. el
+1. **No reenviar claves desconocidas** al config.json final (p. ej. el
    campo de enrutamiento de tipo de filtro o de algoritmo): el script las
    ignora sin avisar, pero ensucia el contrato.
 2. **Validar todo en la capa de API antes de invocar el script** y traducir
