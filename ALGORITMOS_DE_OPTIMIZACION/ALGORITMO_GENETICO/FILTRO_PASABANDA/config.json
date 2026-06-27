@@ -1,0 +1,26 @@
+{
+  "modo": "AVANZADO",
+  "entorno": {
+    "v_fuente": 5,
+    "r_fuente": 470,
+    "r_carga": 1000
+  },
+  "barrido_ac": {
+    "f_inicial": 1,
+    "f_final": 100000
+  },
+  "parametros_optimizador": [
+    { "clave": "tam_poblacion", "valor": 35 },
+    { "clave": "num_generaciones", "valor": 30 },
+    { "clave": "prob_cruce", "valor": 0.8 },
+    { "clave": "prob_mutacion", "valor": 0.3 },
+    { "clave": "elitismo", "valor": 3 },
+    { "clave": "torneo_k", "valor": 3 }
+  ],
+  "frecuencias": [
+    { "clave": "f_aten_1", "valor": 10 },
+    { "clave": "f_paso_1", "valor": 100 },
+    { "clave": "f_paso_2", "valor": 1000 },
+    { "clave": "f_aten_2", "valor": 10000 }
+  ]
+}

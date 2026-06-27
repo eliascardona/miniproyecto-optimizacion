@@ -4,7 +4,7 @@
 
 De forma rápida deseamos introducir a este mini-proyecto de investigación con la siguiente descripción:
 
-El presente mini-proyecto de investigación e ingeniería plantea el desarrollo de una plataforma automatizada para la sintonización y optimización de filtros analógicos activos. Mediante la sinergia de dos disciplinas, el sistema acopla un Motor de Optimización basado en Algoritmos Genéticos y simulación en SPICE (desarrollado en Python) con una Infraestructura de Servidor robusta y escalable (desarrollada en Node.js y PostgreSQL). El objetivo principal es ofrecer una solución computacional eficiente que calcule de manera exacta los valores óptimos de componentes comerciales ($R$ y $C$), minimizando el error de aptitud frente a especificaciones críticas de diseño como frecuencias de corte, ganancia y ancho de banda.
+El presente mini-proyecto de investigación e ingeniería plantea el desarrollo de una plataforma automatizada para la sintonización y optimización de filtros analógicos activos. Mediante la sinergia de dos disciplinas, el sistema acopla un Motor de Optimización (desarrollado en Python) que conjuga distintos algoritmos de optimización con simulación en SPICE, junto con una Infraestructura de Servidor robusta y escalable (desarrollada en Node.js y PostgreSQL). El objetivo principal es ofrecer una solución computacional eficiente que calcule de manera exacta los valores óptimos de componentes comerciales ($R$ y $C$), minimizando el error de aptitud frente a especificaciones críticas de diseño como frecuencias de corte, ganancia y ancho de banda.
 
 ## Propósito del presente repositorio de código
 
@@ -13,9 +13,16 @@ Este repositorio se ha creado con la intención de generar un control de version
 ## Estructura general del repositorio
 
 ```
-    /ALGORITMO_GENETICO
-        # carpeta que contiene los códigos dedicados a desarrollar el algoritmo encargado
-        # de optimizar el circuito eléctrico en cuestión.
+    /ALGORITMOS_DE_OPTIMIZACION
+        # carpeta que contiene los códigos dedicados a desarrollar los distintos algoritmos
+        # encargados de optimizar el circuito eléctrico en cuestión. Dentro de esta carpeta
+        # se agrupan los 4 algoritmos de optimización contemplados en el mini-proyecto:
+        #       - ALGORITMO_GENETICO
+        #       - ENJAMBRE_DE_PARTICULAS (PSO)
+        #       - RECOCIDO_SIMULADO (SA)
+        #       - OPTIMIZACION_BAYESIANA
+        # cada uno de estos, a su vez, contiene una subcarpeta por cada tipo de filtro que
+        # soporta (FILTRO_PASABAJAS, FILTRO_PASAALTAS, FILTRO_PASABANDA, FILTRO_RECHAZABANDA).
 
     /API
         # carpeta que contiene todo el código relativo a la API REST auxiliar del mini-proyecto,

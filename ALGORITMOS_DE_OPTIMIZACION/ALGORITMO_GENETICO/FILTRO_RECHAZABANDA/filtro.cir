@@ -1,0 +1,38 @@
+.title FILTRO RECHAZA BANDA TWIN-T AISLADO (2 BUFFERS)
+Vs 1000 0 AC 10.0
+Rs 1000 1 470.0
+
+* --- 1. BUFFER DE ENTRADA (Aísla Rs) ---
+* Conexiones LM741: In+(1) In-(2) Vp(Vp) Vn(Vn) Out(2)
+XOP1 1 2 Vp Vn 2 LM741
+
+* --- 2. RED TWIN-T PASIVA ---
+* Red superior R-R-C
+R1 2 3 3.9e+3
+R2 3 5 1.5e+5
+C3 3 0 1.0e-6
+
+* Red inferior C-C-R
+C1 2 4 6.8e-7
+C2 4 5 3.3e-8
+R3 4 0 6.8e+1
+
+* --- 3. BUFFER DE SALIDA (Aísla Rl) ---
+* Toma la señal pasiva del nodo 5 y la entrega limpia a la carga
+* Conexiones LM741: In+(5) In-(1002) Vp(Vp) Vn(Vn) Out(1002)
+XOP2 5 1002 Vp Vn 1002 LM741
+
+* Fuentes de Alimentacion y Carga
+Vpp Vp 0 DC 20.0
+Vnn Vn 0 DC -20.0
+Rl 1002 0 1000.0
+
+.INCLUDE lm741.lib
+.AC DEC 100 1 100000
+
+.control
+run
+wrdata datos_filtro.txt vm(1002)
+write simulacion.raw
+.endc
+.END
