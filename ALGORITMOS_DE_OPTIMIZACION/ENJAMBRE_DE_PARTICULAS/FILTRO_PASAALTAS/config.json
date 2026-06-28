@@ -1,0 +1,22 @@
+{
+  "modo": "BASICO",
+  "entorno": {
+    "v_fuente": 8,
+    "r_fuente": 470,
+    "r_carga": 1000
+  },
+  "barrido_ac": {
+    "f_inicial": 1,
+    "f_final": 30000
+  },
+  "parametros_optimizador": [
+    { "clave": "num_particulas", "valor": 30 },
+    { "clave": "num_iteraciones", "valor": 30 },
+    { "clave": "w", "valor": 0.6 },
+    { "clave": "c1", "valor": 1.5 },
+    { "clave": "c2", "valor": 1.5 }
+  ],
+  "frecuencias": [
+    { "clave": "fc_objetivo", "valor": 4500 }
+  ]
+}

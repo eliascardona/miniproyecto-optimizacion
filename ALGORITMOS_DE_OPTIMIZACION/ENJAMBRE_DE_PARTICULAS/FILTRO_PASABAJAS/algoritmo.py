@@ -1,0 +1,680 @@
+import random
+import subprocess
+import sys
+import base64
+import numpy as np
+import re
+import json
+from pathlib import Path
+
+# ============================================================
+# RUTAS DE EJECUCIÓN
+# ============================================================
+NGSPICE_EXE = r"C:\Users\luis_\Desktop\Spice64\bin\ngspice.exe"
+ARCHIVO_CIR = "filtro.cir"
+ARCHIVO_DATOS = "datos_filtro.txt"
+ARCHIVO_CONFIG_JSON = "config.json"
+
+# Gráfica de la respuesta final del filtro optimizado
+GRAFICA_ARCHIVO = "resultado_filtro.png"   # ruta donde se guarda la imagen
+
+# JSON con el resumen del resultado de la optimización
+ARCHIVO_RESULTADO_JSON = "resultado.json"
+
+# ============================================================
+# CARGA DE CONFIGURACIÓN DESDE JSON
+# ============================================================
+def _buscar_etiqueta(lista, etiqueta):
+    for item in lista:
+        if item.get("clave") == etiqueta:
+            return item.get("valor")
+
+def cargar_configuracion(ruta):
+    try:
+        cfg_raw = json.loads(Path(ruta).read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        sys.exit(f"[ERROR] No se encontró el archivo de configuración: {ruta}")
+    except json.JSONDecodeError as e:
+        sys.exit(f"[ERROR] El archivo de configuración '{ruta}' no es un JSON válido: {e}")
+
+    modo = str(cfg_raw.get("modo", "")).strip().upper()
+
+    entorno = cfg_raw["entorno"]
+    v_fuente = float(entorno["v_fuente"])
+    r_fuente = float(entorno["r_fuente"])
+    r_carga = float(entorno["r_carga"])
+
+    parametros = cfg_raw.get("parametros_optimizador", [])
+    frecuencias = cfg_raw.get("frecuencias", [])
+    barrido = cfg_raw.get("barrido_ac", {})
+
+    cfg = {
+        "modo": modo,
+
+        # --- entorno (fijo durante la simulación, NO se optimiza) ---
+        "v_fuente": v_fuente,
+        "r_fuente": r_fuente,
+        "r_carga": r_carga,
+        # Vpp/Vnn de alimentación del Op-Amp: se derivan automáticamente
+        # con 10V de margen sobre la señal de entrada.
+        "vpp": v_fuente + 10.0,
+        "vnn": -(v_fuente + 10.0),
+
+        # --- rango del barrido .AC del .cir ---
+        "f_inicial": float(barrido["f_inicial"]),
+        "f_final": float(barrido["f_final"]),
+
+        # --- parámetros del enjambre de partículas (PSO) ---
+        "num_particulas": int(_buscar_etiqueta(parametros, "num_particulas")),
+        "num_iteraciones": int(_buscar_etiqueta(parametros, "num_iteraciones")),
+        "w": float(_buscar_etiqueta(parametros, "w")),
+        "c1": float(_buscar_etiqueta(parametros, "c1")),
+        "c2": float(_buscar_etiqueta(parametros, "c2")),
+    }
+
+    if modo == "BASICO":
+        cfg["fc_objetivo"] = float(_buscar_etiqueta(frecuencias, "fc_objetivo"))
+    else:  # AVANZADO
+        cfg["f_paso"] = float(_buscar_etiqueta(frecuencias, "f_paso"))
+        cfg["f_aten"] = float(_buscar_etiqueta(frecuencias, "f_aten"))
+
+    return cfg
+
+# Ruta del JSON de configuración
+CFG = cargar_configuracion(ARCHIVO_CONFIG_JSON)
+
+# --- Variables de configuración ---
+MODO = CFG["modo"]                       # "BASICO" o "AVANZADO"
+
+VS_VALOR = CFG["v_fuente"]
+VPP_VALOR = CFG["vpp"]
+VNN_VALOR = CFG["vnn"]
+RS_VALOR = CFG["r_fuente"]
+RL_VALOR = CFG["r_carga"]
+
+F_INICIAL = CFG["f_inicial"]
+F_FINAL = CFG["f_final"]
+
+NUM_PARTICULAS = CFG["num_particulas"]
+NUM_ITERACIONES = CFG["num_iteraciones"]
+W = CFG["w"]
+C1 = CFG["c1"]
+C2 = CFG["c2"]
+
+# ============================================================
+# CONSTANTES DE DISEÑO FIJAS EN EL CÓDIGO (no vienen del JSON)
+# ============================================================
+# Pendiente teórica máxima de un pasabajas Sallen-Key de 4to orden (dos
+# etapas de 2do orden en cascada): 80 dB/dec. Se usa como objetivo en
+# ambos modos y no depende de la configuración del usuario.
+PENDIENTE_OBJETIVO_FC = 80.0
+PENDIENTE_OBJETIVO_PASO_ATEN = 80.0
+
+# Objetivos específicos de cada modo (frecuencias, sí vienen del JSON).
+FC_OBJETIVO = CFG.get("fc_objetivo")
+F_PASO = CFG.get("f_paso")
+F_ATEN = CFG.get("f_aten")
+
+# Amplitudes ideales en MODO AVANZADO: en banda de paso se busca que pase
+# toda la señal de entrada (= v_fuente) y en banda de atenuación que la
+# señal quede completamente eliminada (= 0V). Se derivan de v_fuente, por
+# lo que no es necesario indicarlas en el JSON.
+AMP_PASO_OBJETIVO = VS_VALOR
+AMP_ATEN_OBJETIVO = 0.0
+
+# ============================================================
+# SERIES COMERCIALES (E6 Capacitores, E12 Resistencias)
+# ============================================================
+def generar_serie(base, decadas):
+    serie = []
+    for d in decadas:
+        for b in base:
+            # round() evita el ruido de floating point (ej. 1.5000000000000002e-09
+            # en vez de 1.5e-09) cuando estos valores se serializan en el JSON.
+            serie.append(round(b * (10 ** d), 12))
+    return sorted(serie)
+
+SERIE_E6 = generar_serie([1.0, 1.5, 2.2, 3.3, 4.7, 6.8], range(-9, -5))
+SERIE_E12 = generar_serie([1.0, 1.2, 1.5, 1.8, 2.2, 2.7, 3.3, 3.9, 4.7, 5.6, 6.8, 8.2], range(1, 6))
+
+# ============================================================
+# PARSER DINÁMICO
+# ============================================================
+def extraer_componentes():
+    texto = Path(ARCHIVO_CIR).read_text()
+    detectados = []
+    # Lista de componentes excluidos de la optimización
+    fijos = ["RS", "RL", "VS", "VPP", "VNN"]
+    patron = r"^([CR][a-zA-Z0-9_]*)\s+"
+
+    for linea in texto.splitlines():
+        linea = linea.strip()
+        m = re.match(patron, linea)
+        if m:
+            nombre = m.group(1)
+            if nombre.upper() not in fijos:
+                partes = linea.split()
+                tipo = "R" if nombre.upper().startswith("R") else "C"
+                nodos = partes[1:3]  # terminal positivo y negativo (R/C son de 2 terminales)
+                detectados.append({"nombre": nombre, "tipo": tipo, "nodos": nodos})
+    return detectados
+
+COMPONENTES = extraer_componentes()
+NUM_PARAMETROS = len(COMPONENTES)
+
+# ============================================================
+# FORMATO SPICE Y ACTUALIZACIÓN (CON VPP/VNN AUTOMÁTICOS)
+# ============================================================
+def valor_spice(v):
+    return re.sub(r'e([+-])0', r'e\1', f"{v:.1e}")
+
+def valor_frecuencia(v):
+    """Formatea una frecuencia del barrido .AC para SPICE: entero limpio
+    si no tiene parte decimal (1 -> '1', 1e7 -> '10000000')."""
+    return str(int(v)) if float(v).is_integer() else str(v)
+
+def actualizar_circuito(individuo):
+    texto = Path(ARCHIVO_CIR).read_text()
+    lineas = texto.splitlines()
+
+    # 1. Actualizar componentes R y C
+    for i, comp in enumerate(COMPONENTES):
+        lista = SERIE_E12 if comp["tipo"] == "R" else SERIE_E6
+        nuevo_valor = valor_spice(lista[individuo[i]])
+
+        for idx, linea in enumerate(lineas):
+            if linea.strip().startswith(comp["nombre"] + " "):
+                partes = linea.split()
+                partes[-1] = nuevo_valor
+                lineas[idx] = " ".join(partes)
+                break
+
+    # 2. Inyección dinámica de parámetros fijos y fuentes (vienen del JSON)
+    for i, linea in enumerate(lineas):
+        partes = linea.split()
+        if not partes: continue
+        nombre = partes[0].upper()
+
+        if nombre == "VS":
+            partes[-1] = str(VS_VALOR)
+            lineas[i] = " ".join(partes)
+        elif nombre == "VPP":
+            partes[-1] = str(VPP_VALOR)
+            lineas[i] = " ".join(partes)
+        elif nombre == "VNN":
+            partes[-1] = str(VNN_VALOR)
+            lineas[i] = " ".join(partes)
+        elif nombre == "RS":
+            partes[-1] = str(RS_VALOR)
+            lineas[i] = " ".join(partes)
+        elif nombre == "RL":
+            partes[-1] = str(RL_VALOR)
+            lineas[i] = " ".join(partes)
+        elif nombre == ".AC":
+            partes[-2] = valor_frecuencia(F_INICIAL)
+            partes[-1] = valor_frecuencia(F_FINAL)
+            lineas[i] = " ".join(partes)
+
+    Path(ARCHIVO_CIR).write_text("\n".join(lineas))
+
+def ejecutar_spice():
+    resultado = subprocess.run([NGSPICE_EXE, "-b", ARCHIVO_CIR], capture_output=True, text=True)
+    return resultado.returncode == 0
+
+# ============================================================
+# MÉTRICAS
+# ============================================================
+def _db(x):
+    return 20.0 * np.log10(np.maximum(x, 1e-12))
+
+def calcular_f_plano(frecuencias, amplitudes):
+    """
+    Mide qué tan ancha es la meseta de la banda de ATENUACIÓN desde el
+    mínimo global de la curva hacia adelante (frecuencias más altas).
+
+    Un "hueco" angosto (el AG encuentra un mínimo profundo justo en
+    F_ATEN/Fc, pero la curva vuelve a subir enseguida después, en vez de
+    quedarse atenuada) cae casi de inmediato y obtiene un f_plano cercano
+    a 0; una banda de atenuación ancha que se mantiene abajo tarda varias
+    décadas en volver a subir y se acerca a 1. Si la curva nunca vuelve a
+    subir por encima del 5% de la amplitud máxima dentro del barrido (sin
+    evidencia de que se angoste), se devuelve 1.0, el mejor caso posible.
+
+    Nota: si el mínimo global cae justo en el último punto del barrido
+    (la curva sigue bajando cuando se acaba el barrido), tampoco hay datos
+    posteriores que revisar y también se devuelve 1.0 para esa parte.
+
+    Además, esto solo mira hacia ADELANTE desde el mínimo global, así que
+    es ciego a una resonancia que ocurra ANTES de llegar a ese mínimo, es
+    decir, mientras la curva todavía está descendiendo desde la banda de
+    paso hacia la banda de atenuación. Para eso se
+    mide la peor "subida" respecto al mínimo acumulado hasta el mínimo
+    global (running min): cualquier repunte en la bajada cuenta como
+    resonancia. f_plano final es el peor (mínimo) de ambas métricas.
+    """
+    idx_min = int(np.argmin(amplitudes))
+    amp_min = amplitudes[idx_min]
+    f_min = frecuencias[idx_min]
+    amp_max = np.max(amplitudes)
+
+    umbral_5 = 0.05 * amp_max
+    idx_subida = None
+    for i in range(idx_min, len(amplitudes)):
+        if amplitudes[i] > umbral_5:
+            idx_subida = i
+            break
+
+    if idx_subida is None:
+        f_plano_post = 1.0
+    else:
+        ancho_decadas = np.log10(frecuencias[idx_subida] / f_min)
+        f_plano_post = float(ancho_decadas / (ancho_decadas + 1.0))
+
+    # Resonancia ANTES del mínimo global: cualquier repunte respecto al
+    # mínimo ya alcanzado en la bajada hacia idx_min.
+    if amp_max > 0 and idx_min > 0:
+        bajada = amplitudes[:idx_min + 1]
+        minimo_acumulado = np.minimum.accumulate(bajada)
+        peor_subida = float(np.max(bajada - minimo_acumulado))
+        f_plano_pre = 1.0 / (1.0 + (peor_subida / amp_max) * 10.0)
+    else:
+        f_plano_pre = 1.0
+
+    return min(f_plano_post, f_plano_pre)
+
+def obtener_metricas_fc():
+    """
+    MODO BASICO: busca la frecuencia de corte real (cruce por amp_dc/sqrt(2))
+    y mide la pendiente una década por encima de esa Fc.
+    Devuelve: fc_real, amp_dc, amp_max, pendiente, f_plano
+    """
+    try:
+        datos = np.loadtxt(ARCHIVO_DATOS)
+        frecuencias = datos[:, 0]
+        amplitudes = datos[:, 1]
+
+        amp_dc = amplitudes[0]
+        amp_max = np.max(amplitudes)
+
+        nivel_fc = amp_dc / np.sqrt(2)
+        fc_real = None
+        for i in range(len(amplitudes) - 1):
+            if (amplitudes[i] <= nivel_fc <= amplitudes[i+1]) or (amplitudes[i] >= nivel_fc >= amplitudes[i+1]):
+                f1, f2 = frecuencias[i], frecuencias[i+1]
+                a1, a2 = amplitudes[i], amplitudes[i+1]
+                fc_real = f1 + (nivel_fc - a1) * (f2 - f1) / (a2 - a1)
+                break
+
+        if fc_real is None: fc_real = frecuencias[np.argmin(np.abs(amplitudes - nivel_fc))]
+
+        idx_fc = np.argmin(np.abs(frecuencias - fc_real))
+        f_ref = fc_real * 10.0
+        idx_ref = np.argmin(np.abs(frecuencias - f_ref))
+
+        pend = abs(_db(amplitudes[idx_fc]) - _db(amplitudes[idx_ref]))
+
+        # Anti-resonancia: qué tan ancha es la meseta de la banda de
+        # atenuación arriba de Fc (un "hueco" angosto justo en Fc puede dar
+        # un cruce de -3dB y una pendiente "buenos" sin ser un pasabajas real).
+        f_plano = calcular_f_plano(frecuencias, amplitudes)
+
+        return float(fc_real), float(amp_dc), float(amp_max), float(pend), float(f_plano)
+    except:
+        return None, None, 0, 0, 0
+
+def obtener_metricas_paso_aten():
+    """
+    MODO AVANZADO: evalúa la respuesta en dos puntos, F_PASO (banda de paso) y
+    F_ATEN (banda de atenuación), interpolando en escala logarítmica de
+    frecuencia (el barrido es .AC DEC). Devuelve:
+        amp_dc    -> ganancia en DC (V)
+        amp_max   -> pico máximo (para detectar saturación / picos resonantes)
+        amp_paso  -> voltaje real (V) en F_PASO -> se busca que sea = AMP_PASO_OBJETIVO
+        amp_aten  -> voltaje real (V) en F_ATEN -> se busca que sea = AMP_ATEN_OBJETIVO
+        pendiente -> pendiente real (dB/dec) entre F_PASO y F_ATEN
+        f_plano   -> qué tan ancha es la meseta de la banda de atenuación (anti-resonancia)
+    """
+    try:
+        datos = np.loadtxt(ARCHIVO_DATOS)
+        frecuencias = datos[:, 0]
+        amplitudes = datos[:, 1]
+
+        amp_dc = amplitudes[0]
+        amp_max = np.max(amplitudes)
+
+        log_f = np.log10(frecuencias)
+        amp_paso = np.interp(np.log10(F_PASO), log_f, amplitudes)
+        amp_aten = np.interp(np.log10(F_ATEN), log_f, amplitudes)
+
+        # abs() en ambos lados: así la fórmula da la magnitud de la
+        # pendiente sin importar si F_PASO/F_ATEN quedan invertidas en el
+        # JSON (en el pasabajas lo normal es F_PASO < F_ATEN, pero si se
+        # invirtieran por error daría una pendiente negativa silenciosa
+        # en vez de fallar fuerte).
+        pendiente = abs(_db(amp_paso) - _db(amp_aten)) / abs(np.log10(F_ATEN / F_PASO))
+
+        # Anti-resonancia: si entre F_PASO y F_ATEN la pendiente va hacia
+        # abajo y se revierte hacia arriba (o si después del mínimo global
+        # la curva vuelve a subir), se penaliza igual que en el pasaaltas.
+        f_plano = calcular_f_plano(frecuencias, amplitudes)
+
+        return float(amp_dc), float(amp_max), float(amp_paso), float(amp_aten), float(pendiente), float(f_plano)
+    except:
+        return None, 0, 0, 0, 0, 0
+
+# ============================================================
+# GRÁFICA DE LA RESPUESTA FINAL
+# ============================================================
+def graficar_resultado(archivo_salida=GRAFICA_ARCHIVO):
+    """
+    Grafica la respuesta en frecuencia del circuito ya optimizado, usando
+    los datos de la última simulación (la del mejor individuo encontrado
+    por el AG) y guarda la imagen en disco.
+    """
+    try:
+        import matplotlib.pyplot as plt
+    except ImportError:
+        print("[AVISO] No se pudo graficar: falta instalar matplotlib (pip install matplotlib).")
+        return
+
+    try:
+        datos = np.loadtxt(ARCHIVO_DATOS)
+    except Exception as e:
+        print(f"[AVISO] No se pudo leer '{ARCHIVO_DATOS}' para graficar: {e}")
+        return
+
+    frecuencias = datos[:, 0]
+    amplitudes = datos[:, 1]
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+
+    if MODO == "BASICO":
+        # Respuesta en amplitud (V)
+        fc_real, amp_dc, amp_max, pend, _ = obtener_metricas_fc()
+        nivel_fc = (amp_dc / np.sqrt(2)) if amp_dc else None
+
+        ax.semilogx(frecuencias, amplitudes, color="#2563eb", linewidth=2, label="Respuesta simulada")
+        if nivel_fc is not None:
+            ax.axhline(nivel_fc, color="gray", linestyle="--", linewidth=1,
+                       label=f"Nivel de corte (-3 dB) ({nivel_fc:.2f} V)")
+        ax.axvline(FC_OBJETIVO, color="#16a34a", linestyle="--", linewidth=1,
+                   label=f"Fc objetivo ({FC_OBJETIVO:.0f} Hz)")
+        if fc_real:
+            ax.axvline(fc_real, color="#dc2626", linestyle=":", linewidth=1.5,
+                       label=f"Fc obtenida ({fc_real:.0f} Hz)")
+
+        ax.set_ylabel("Amplitud (V)")
+        ax.set_title("Respuesta en frecuencia del filtro optimizado (MODO BASICO)")
+
+    else:  # AVANZADO
+        ax.semilogx(frecuencias, amplitudes, color="#2563eb", linewidth=2, label="Respuesta simulada")
+        ax.axhline(AMP_PASO_OBJETIVO, color="#16a34a", linestyle="--", linewidth=1,
+                   label=f"Objetivo banda de paso ({AMP_PASO_OBJETIVO:.2f} V)")
+        ax.axhline(AMP_ATEN_OBJETIVO, color="#dc2626", linestyle="--", linewidth=1,
+                   label=f"Objetivo banda de atenuación ({AMP_ATEN_OBJETIVO:.2f} V)")
+        ax.axvline(F_PASO, color="#16a34a", linestyle=":", linewidth=1.5,
+                   label=f"F_PASO ({F_PASO:.0f} Hz)")
+        ax.axvline(F_ATEN, color="#dc2626", linestyle=":", linewidth=1.5,
+                   label=f"F_ATEN ({F_ATEN:.0f} Hz)")
+
+        ax.set_ylabel("Amplitud (V)")
+        ax.set_title("Respuesta en frecuencia del filtro optimizado (MODO AVANZADO)")
+
+    ax.set_xlabel("Frecuencia (Hz)")
+    ax.grid(True, which="both", linestyle=":", alpha=0.5)
+    ax.legend(loc="best", fontsize=8)
+    fig.tight_layout()
+
+    fig.savefig(archivo_salida, dpi=150)
+    print(f"\nGráfica guardada en: {archivo_salida}")
+
+# ============================================================
+# JSON DE RESULTADO
+# ============================================================
+def _codificar_imagen_base64(ruta_imagen):
+    """Lee un archivo PNG y lo devuelve codificado en base64 (string plano,
+    sin el prefijo 'data:image/png;base64,' — eso lo agrega quien consuma
+    el JSON si lo va a mostrar directo en un <img src=...>)."""
+    try:
+        return base64.b64encode(Path(ruta_imagen).read_bytes()).decode("ascii")
+    except Exception as e:
+        print(f"[AVISO] No se pudo codificar la imagen '{ruta_imagen}' en base64: {e}")
+        return None
+
+def guardar_resultado_json(mejor_global, mejor_fit, archivo_salida=ARCHIVO_RESULTADO_JSON,
+                            archivo_grafica=GRAFICA_ARCHIVO):
+    """
+    Genera un JSON con el resumen del resultado de la optimización: el
+    fitness alcanzado, las frecuencias obtenidas en la simulación final,
+    los componentes optimizados con su valor, y la gráfica de la respuesta
+    final codificada en base64 (para que el resultado quede 100% autocontenido
+    en un solo JSON, útil de cara a una API que recibe y devuelve solo JSON).
+    """
+    componentes_optimizados = [
+        {
+            "nombre": comp["nombre"],
+            "valor": (SERIE_E12 if comp["tipo"] == "R" else SERIE_E6)[mejor_global[i]],
+        }
+        for i, comp in enumerate(COMPONENTES)
+    ]
+
+    if MODO == "BASICO":
+        fc_real, amp_dc, amp_max, pend, _ = obtener_metricas_fc()
+        frecuencias_obtenidas = [
+            {"clave": "fc_obtenida", "valor": fc_real},
+        ]
+    else:  # AVANZADO
+        amp_dc, amp_max, amp_paso, amp_aten, pendiente, _ = obtener_metricas_paso_aten()
+        frecuencias_obtenidas = [
+            {"clave": "amp_paso_obtenida", "valor": amp_paso},
+            {"clave": "amp_aten_obtenida", "valor": amp_aten},
+        ]
+
+    resultado = {
+        "fitness": mejor_fit,
+        "frecuencias_obtenidas": frecuencias_obtenidas,
+        "componentes_optimizados": componentes_optimizados,
+        "grafica_png_base64": _codificar_imagen_base64(archivo_grafica),
+    }
+
+    Path(archivo_salida).write_text(json.dumps(resultado, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"Resultado guardado en: {archivo_salida}")
+    return resultado
+
+# ============================================================
+# FITNESS
+# ============================================================
+def fitness_fc(individuo):
+    """MODO BASICO: fitness por Fc objetivo + pendiente objetivo + anti-resonancia."""
+    try:
+        actualizar_circuito(individuo)
+        if not ejecutar_spice(): return 1e-6, None, None, 0, 0, 0, 0, 0
+        fc, amp_dc, amp_max, pend, f_plano = obtener_metricas_fc()
+
+        if fc is None: return 1e-6, None, None, 0, 0, 0, 0, 0
+        # Penalización si el Op-Amp satura (pico mayor al margen de seguridad)
+        if amp_max > (VS_VALOR * 1.01): return 1e-6, fc, amp_dc, amp_max, pend, 0, 0, f_plano
+
+        f_fc = 1.0 / (1.0 + abs(fc - FC_OBJETIVO) / FC_OBJETIVO)
+        f_pend = 1.0 / (1.0 + abs(pend - PENDIENTE_OBJETIVO_FC) / PENDIENTE_OBJETIVO_FC)
+
+        fit = (f_plano * 0.2) + (f_fc * 0.65) + (f_pend * 0.15)
+        return float(fit), fc, amp_dc, amp_max, pend, f_fc, f_pend, f_plano
+    except Exception:
+        return 1e-6, None, None, 0, 0, 0, 0, 0
+
+def fitness_paso_aten(individuo):
+    """MODO AVANZADO: fitness por acercamiento a voltaje máximo en F_PASO, mínimo en F_ATEN y anti-resonancia."""
+    try:
+        actualizar_circuito(individuo)
+        if not ejecutar_spice(): return 1e-6, None, 0, 0, 0, 0, 0, 0, 0
+        amp_dc, amp_max, amp_paso, amp_aten, pendiente, f_plano = obtener_metricas_paso_aten()
+
+        if amp_dc is None: return 1e-6, None, 0, 0, 0, 0, 0, 0, 0
+        # Penalización si el Op-Amp satura (pico mayor al margen de seguridad)
+        if amp_max > (VS_VALOR * 1.01): return 1e-6, amp_dc, amp_paso, amp_aten, pendiente, 0, 0, 0, 0
+
+        # 1. Calculamos el error relativo (de 0.0 a 1.0)
+        error_rel_paso = abs(AMP_PASO_OBJETIVO - amp_paso) / AMP_PASO_OBJETIVO
+        # 2. Aplicamos un castigo severo. Si el error es grande, el denominador explota.
+        # El factor 100.0 y la potencia 4 aseguran que filtros "tramposos" reprueben al instante.
+        f_paso = 1.0 / (1.0 + (error_rel_paso ** 4) * 100.0)
+        # En F_ATEN: mientras más cerca de AMP_ATEN_OBJETIVO, mejor.
+        f_aten = 1.0 / (1.0 + abs(amp_aten - AMP_ATEN_OBJETIVO) / VS_VALOR)
+        # Pendiente real entre ambos puntos, comparada con la teórica del filtro.
+        f_pend = 1.0 / (1.0 + abs(pendiente - PENDIENTE_OBJETIVO_PASO_ATEN) / PENDIENTE_OBJETIVO_PASO_ATEN)
+
+        fit = (f_paso * 0.4) + (f_aten * 0.3) + (f_pend * 0.2) + (f_plano * 0.1)
+        return float(fit), amp_dc, amp_paso, amp_aten, pendiente, f_paso, f_aten, f_pend, f_plano
+    except Exception:
+        return 1e-6, None, 0, 0, 0, 0, 0, 0, 0
+
+def fitness(individuo):
+    """Despacha al método de evaluación según MODO."""
+    if MODO == "BASICO":
+        return fitness_fc(individuo)
+    else:
+        return fitness_paso_aten(individuo)
+
+# ============================================================
+# ENJAMBRE DE PARTÍCULAS (PSO)
+# ============================================================
+def crear_individuo():
+    return [random.randint(0, (len(SERIE_E12) if c["tipo"]=="R" else len(SERIE_E6))-1) for c in COMPONENTES]
+
+# Límite superior (índice máximo válido) de cada dimensión, según si el
+# componente es R (serie E12) o C (serie E6).
+LIMITES = [(len(SERIE_E12) if c["tipo"] == "R" else len(SERIE_E6)) - 1 for c in COMPONENTES]
+
+# Velocidad máxima por dimensión: acota qué tanto puede moverse una
+# partícula en un solo paso (20% del rango de esa dimensión), evitando que
+# "vuele" fuera del espacio de búsqueda de un salto.
+VMAX = [0.2 * lim for lim in LIMITES]
+
+def crear_velocidad():
+    return [random.uniform(-VMAX[i], VMAX[i]) for i in range(NUM_PARAMETROS)]
+
+def redondear_individuo(posicion):
+    """Convierte una posición continua de PSO al índice entero (discreto)
+    de la serie comercial correspondiente, recortando a los límites."""
+    return [int(round(min(max(p, 0.0), LIMITES[i]))) for i, p in enumerate(posicion)]
+
+def imprimir_encabezado():
+    print(f"Configuración: '{ARCHIVO_CONFIG_JSON}' | "
+          f"V_fuente={VS_VALOR} V | Rs={RS_VALOR} Ω | Rl={RL_VALOR} Ω")
+    print(f"Barrido .AC: {valor_frecuencia(F_INICIAL)} Hz a {valor_frecuencia(F_FINAL)} Hz")
+    print(f"PSO: partículas={NUM_PARTICULAS} | iteraciones={NUM_ITERACIONES} | "
+          f"w={W} | c1={C1} | c2={C2}")
+    if MODO == "BASICO":
+        print(f"MODO BASICO (Fc + pendiente) | Fc objetivo={FC_OBJETIVO} Hz | "
+              f"Pendiente objetivo={PENDIENTE_OBJETIVO_FC:.1f} dB/dec\n")
+        encabezado = (f"{'Iter':<6} | {'Fit':<6} | {'Fc (Hz)':<10} | {'Amp (V)':<8} | {'Pend (dB/dec)':<15} | "
+                      f"{'f_fc':<8} | {'f_pend':<8} | {'f_plano':<8}")
+        print(encabezado)
+        print("-" * len(encabezado))
+    else:
+        print(f"MODO AVANZADO (paso/atenuación) | F_PASO={F_PASO} Hz (objetivo {AMP_PASO_OBJETIVO} V) | "
+              f"F_ATEN={F_ATEN} Hz (objetivo {AMP_ATEN_OBJETIVO} V) | "
+              f"Pendiente objetivo ~ {PENDIENTE_OBJETIVO_PASO_ATEN:.1f} dB/dec\n")
+        encabezado = (f"{'Iter':<6} | {'Fit':<6} | {'Amp Paso (V)':<13} | {'Amp Aten (V)':<13} | {'Pend (dB/dec)':<13} | "
+                      f"{'f_paso':<8} | {'f_aten':<8} | {'f_pend':<8} | {'f_plano':<8}")
+        print(encabezado)
+        print("-" * len(encabezado))
+
+def imprimir_generacion(gen, fit, res_best):
+    if MODO == "BASICO":
+        fc, amp, pend = res_best[1], res_best[2], res_best[4]
+        f_fc, f_pend, f_plano = res_best[5], res_best[6], res_best[7]
+        print(f"{gen+1:<6} | {fit:.4f} | {fc:10.1f} | {amp:8.2f} | {pend:15.2f} | "
+              f"{f_fc:<8.4f} | {f_pend:<8.4f} | {f_plano:<8.4f}")
+    else:
+        amp_paso, amp_aten, pend = res_best[2], res_best[3], res_best[4]
+        f_paso, f_aten, f_pend, f_plano = res_best[5], res_best[6], res_best[7], res_best[8]
+        print(f"{gen+1:<6} | {fit:.4f} | {amp_paso:13.3f} | {amp_aten:13.4f} | {pend:13.2f} | "
+              f"{f_paso:<8.4f} | {f_aten:<8.4f} | {f_pend:<8.4f} | {f_plano:<8.4f}")
+
+def ejecutar_PSO():
+    # Posiciones iniciales: mismos índices discretos que el AG, pero
+    # representados como flotantes porque PSO necesita moverse en un
+    # espacio continuo (se redondean solo al evaluar el circuito).
+    posiciones = [[float(g) for g in crear_individuo()] for _ in range(NUM_PARTICULAS)]
+    velocidades = [crear_velocidad() for _ in range(NUM_PARTICULAS)]
+
+    # Caché de fitness: evita volver a correr SPICE para un individuo ya
+    # evaluado antes (misma idea que en el AG, aquí la clave es el
+    # individuo discreto resultante de redondear la posición).
+    cache_fitness = {}
+
+    def evaluar(individuo):
+        clave = tuple(individuo)
+        if clave not in cache_fitness:
+            cache_fitness[clave] = fitness(individuo)
+        return cache_fitness[clave]
+
+    # Mejor posición histórica de cada partícula (pbest) y su fitness.
+    pbest_pos = [pos[:] for pos in posiciones]
+    pbest_individuo = [redondear_individuo(pos) for pos in posiciones]
+    pbest_res = [evaluar(ind) for ind in pbest_individuo]
+    pbest_fit = [r[0] for r in pbest_res]
+
+    # Mejor posición global del enjambre (gbest).
+    idx_gbest = int(np.argmax(pbest_fit))
+    gbest_pos = pbest_pos[idx_gbest][:]
+    gbest_individuo = pbest_individuo[idx_gbest][:]
+    gbest_fit = pbest_fit[idx_gbest]
+    gbest_res = pbest_res[idx_gbest]
+
+    imprimir_encabezado()
+
+    for it in range(NUM_ITERACIONES):
+        for p in range(NUM_PARTICULAS):
+            for d in range(NUM_PARAMETROS):
+                r1, r2 = random.random(), random.random()
+                # Ecuación clásica de PSO: inercia + atracción al mejor
+                # personal (cognitivo) + atracción al mejor global (social).
+                velocidades[p][d] = (
+                    W * velocidades[p][d]
+                    + C1 * r1 * (pbest_pos[p][d] - posiciones[p][d])
+                    + C2 * r2 * (gbest_pos[d] - posiciones[p][d])
+                )
+                velocidades[p][d] = max(-VMAX[d], min(VMAX[d], velocidades[p][d]))
+
+                posiciones[p][d] += velocidades[p][d]
+                posiciones[p][d] = max(0.0, min(float(LIMITES[d]), posiciones[p][d]))
+
+            individuo = redondear_individuo(posiciones[p])
+            res = evaluar(individuo)
+            fit = res[0]
+
+            if fit > pbest_fit[p]:
+                pbest_fit[p] = fit
+                pbest_pos[p] = posiciones[p][:]
+                pbest_individuo[p] = individuo[:]
+                pbest_res[p] = res
+
+        idx_mejor_pbest = int(np.argmax(pbest_fit))
+        if pbest_fit[idx_mejor_pbest] > gbest_fit:
+            gbest_fit = pbest_fit[idx_mejor_pbest]
+            gbest_pos = pbest_pos[idx_mejor_pbest][:]
+            gbest_individuo = pbest_individuo[idx_mejor_pbest][:]
+            gbest_res = pbest_res[idx_mejor_pbest]
+
+        imprimir_generacion(it, gbest_fit, gbest_res)
+
+    actualizar_circuito(gbest_individuo)
+    ejecutar_spice()
+
+    print("\n" + "="*50)
+    print("OPTIMIZACIÓN FINALIZADA")
+    print("Componentes Optimizados:")
+    for i, comp in enumerate(COMPONENTES):
+        lista = SERIE_E12 if comp["tipo"] == "R" else SERIE_E6
+        val = lista[gbest_individuo[i]]
+        print(f"  {comp['nombre']}: {valor_spice(val)}")
+    print("="*50)
+
+    graficar_resultado()
+    guardar_resultado_json(gbest_individuo, gbest_fit)
+
+if __name__ == "__main__":
+    ejecutar_PSO()

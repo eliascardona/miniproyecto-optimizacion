@@ -75,6 +75,12 @@ Las 5 claves raíz (modo, entorno, barrido_ac, parametros_optimizador,
 frecuencias) son **todas obligatorias**. Si falta cualquiera, el script
 termina en una excepción no controlada.
 
+El ejemplo anterior muestra las claves de parametros_optimizador para el
+Algoritmo Genético. Si el filtro se va a optimizar con PSO, ese mismo
+arreglo cambia a las claves num_particulas, num_iteraciones, w, c1 y c2
+(ver sección 6); el resto del esqueleto (entorno, barrido_ac, frecuencias)
+no cambia.
+
 Dentro de parametros_optimizador y frecuencias, el **orden de los
 elementos del arreglo no importa** — cada valor se busca por su "clave",
 no por posición. Lo que sí importa es que la clave exista exactamente con
@@ -331,6 +337,65 @@ de abajo):
   converger demasiado rápido a una sola solución y perder la oportunidad de
   explorar otras combinaciones.
 
+### Enjambre de Partículas (PSO)
+
+Claves obligatorias (deben llamarse exactamente así):
+
+| Clave | Tipo | Regla dura |
+|---|---|---|
+| num_particulas | integer | ≥ 1 — bloqueante: en 0 no hay enjambre que evaluar y el script termina en error al buscar el mejor índice sobre una lista vacía |
+| num_iteraciones | integer | ≥ 0 — **no bloqueante en 0**: a diferencia del AG, PSO evalúa la posición inicial de cada partícula antes de entrar al ciclo principal, así que en 0 iteraciones el script sí termina y guarda un resultado, pero ese resultado es solo el mejor de un enjambre inicial aleatorio, sin ningún refinamiento |
+| w | number | sin un mínimo/máximo que el script valide; fuera de [0, 1] el enjambre puede divergir (ver abajo) |
+| c1 | number | sin mínimo que el script valide; valores negativos invierten la atracción hacia el mejor personal y no tienen sentido físico para el algoritmo |
+| c2 | number | mismo caso que c1, pero para la atracción hacia el mejor global |
+
+**Valores ideales y por qué** (misma referencia de escala que el AG: 6 a 8
+componentes a optimizar, cada uno con 24 a 60 valores comerciales
+posibles):
+
+- **num_particulas** — ideal entre 20 y 40. Cada partícula es, en esencia,
+  un individuo del AG que en vez de cruzarse y mutar se desplaza guiado por
+  su propia mejor posición histórica y la del enjambre; un enjambre más
+  grande cubre más del espacio de búsqueda en cada iteración, pero igual
+  que en el AG, cada partícula nueva implica una simulación completa del
+  circuito, así que el costo crece linealmente con este valor.
+
+- **num_iteraciones** — ideal entre 30 y 50, por la misma razón que
+  num_generaciones en el AG: pasado cierto punto el enjambre ya convergió
+  alrededor de un óptimo y las iteraciones adicionales solo agregan tiempo
+  de cómputo. Aquí sí importa más no quedarse corto, porque con muy pocas
+  iteraciones (sección anterior) el resultado puede ser apenas mejor que
+  una búsqueda aleatoria.
+
+- **w (inercia)** — ideal entre 0.4 y 0.9. Controla qué tanto conserva
+  cada partícula su velocidad anterior: un valor alto favorece la
+  exploración (la partícula sigue "viajando" aunque el enjambre ya tenga
+  un buen candidato), mientras que un valor bajo la frena rápido cerca de
+  los mejores puntos encontrados, favoreciendo la explotación. Valores por
+  encima de 1 pueden hacer que la velocidad crezca sin control de una
+  iteración a otra (el enjambre "vibra" sin converger).
+
+- **c1 (coeficiente cognitivo)** y **c2 (coeficiente social)** — ideal
+  entre 1.0 y 2.0 cada uno, y típicamente con c1 ≈ c2 para no sesgar el
+  enjambre hacia un solo tipo de atracción. c1 pondera cuánto se mueve una
+  partícula hacia su propia mejor posición histórica (memoria individual);
+  c2 pondera cuánto se mueve hacia la mejor posición encontrada por todo el
+  enjambre (memoria colectiva). Si c1 domina sobre c2, las partículas
+  exploran de forma casi independiente y el enjambre tarda más en
+  coordinarse; si c2 domina sobre c1, todas las partículas convergen rápido
+  hacia el mismo punto, con riesgo de quedarse en un óptimo local antes de
+  tiempo.
+
+**Nota de implementación (no forma parte del config.json, pero afecta el
+comportamiento):** cada componente del circuito sigue codificándose como el
+índice de una lista comercial (E12 para resistencias, E6 para
+capacitores), igual que en el AG. PSO mueve esos índices en un espacio
+continuo y los redondea al entero más cercano solo al momento de evaluar el
+circuito; la velocidad máxima por componente está fijada internamente en
+el script como 20 % del rango de su lista comercial, para evitar que una
+partícula salte fuera del espacio de búsqueda en un solo paso. Este 20 %
+no es configurable desde el config.json en la versión actual.
+
 ---
 
 ## 7. frecuencias — varía según tipo de filtro y modo
@@ -503,7 +568,9 @@ API:
   f_inicial/f_final (sección 5.2).
 - Que r_fuente/r_carga pertenezcan a la serie E12 (fórmula en la
   sección 4.2).
-- Que f_inicial < f_final y que elitismo < tam_poblacion.
+- Que f_inicial < f_final y, si el algoritmo es el AG, que
+  elitismo < tam_poblacion (regla específica del AG; PSO no tiene un
+  par de claves equivalente).
 
 Esta segunda capa conviene parametrizarla por tipo de filtro y, en el caso
 de parametros_optimizador, por el algoritmo de optimización seleccionado
@@ -528,6 +595,11 @@ de parametros_optimizador, por el algoritmo de optimización seleccionado
 | parametros_optimizador.prob_mutacion *(Algoritmo Genético)* | number | sí | [0, 1]; ideal 0.2-0.35 | dominio matemático + recomendación |
 | parametros_optimizador.elitismo *(Algoritmo Genético)* | integer | sí | 0 ≤ elitismo < tam_poblacion; ideal 2-4 | algoritmo (si no, deja de evolucionar) |
 | parametros_optimizador.torneo_k *(Algoritmo Genético)* | integer | sí | ≥ 1 (obligatorio); ideal 2-5 | algoritmo |
+| parametros_optimizador.num_particulas *(PSO)* | integer | sí | ≥ 1 (obligatorio); ideal 20-40 | algoritmo + recomendación |
+| parametros_optimizador.num_iteraciones *(PSO)* | integer | sí | ≥ 0 (no bloqueante en 0, a diferencia del AG); ideal 30-50 | algoritmo + recomendación |
+| parametros_optimizador.w *(PSO)* | number | sí | sin tope validado por el script; ideal 0.4-0.9 | recomendación (>1 puede diverger) |
+| parametros_optimizador.c1 *(PSO)* | number | sí | sin tope validado por el script; ideal 1.0-2.0 | recomendación |
+| parametros_optimizador.c2 *(PSO)* | number | sí | sin tope validado por el script; ideal 1.0-2.0, c1≈c2 | recomendación |
 | frecuencias.* | number | depende de tipo+modo (sección 7) | margen mínimo de una década respecto a f_inicial/f_final; orden según tabla 7.1; recomendado 1 dígito sig. × 10ⁿ | claves obligatorias + recomendación (rango/orden/redondeo) |
 
 ---
