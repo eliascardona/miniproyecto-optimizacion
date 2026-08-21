@@ -1,0 +1,47 @@
+{
+  "fitness": 0.9613310495461467,
+  "frecuencias_obtenidas": [
+    {
+      "clave": "amp_paso_obtenida",
+      "valor": 4.63578203
+    },
+    {
+      "clave": "amp_aten_obtenida",
+      "valor": 0.0559315444
+    }
+  ],
+  "componentes_optimizados": [
+    {
+      "nombre": "C1_1",
+      "valor": 1e-09
+    },
+    {
+      "nombre": "C2_1",
+      "valor": 6.8e-08
+    },
+    {
+      "nombre": "R1_1",
+      "valor": 18000.0
+    },
+    {
+      "nombre": "R2_1",
+      "valor": 150000.0
+    },
+    {
+      "nombre": "C1_2",
+      "valor": 6.8e-09
+    },
+    {
+      "nombre": "C2_2",
+      "valor": 6.8e-09
+    },
+    {
+      "nombre": "R1_2",
+      "valor": 1800.0
+    },
+    {
+      "nombre": "R2_2",
+      "valor": 4700.0
+    }
+  ]
+}
