@@ -64,7 +64,7 @@ def _cargar_clase_worker(script_path: str):
         modulo = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(modulo)
         return getattr(modulo, "GeneticWorker", None)
-    except Exception:
+    except BaseException:
         return None
 
 

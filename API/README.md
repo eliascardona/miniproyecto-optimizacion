@@ -13,7 +13,7 @@ Frontend (React)
   Express API (port 3000)       <-- BFF, validacion Nivel 1
        |
        v
-  FastAPI Worker (port 8000)    <-- validacion Nivel 2, ejecucion
+  FastAPI Worker (port 8001)    <-- validacion Nivel 2, ejecucion
        |
        v
   subprocess (Python script)    <-- caja negra del equipo de Computacion Inteligente
@@ -33,22 +33,28 @@ Frontend (React)
 
 ### Express API (Node.js)
 
+Versiones declaradas en `API/package.json`:
+
 | Paquete | Version | Descripcion |
 |---------|---------|-------------|
-| express | ^4.21 | Framework HTTP |
-| axios | ^1.12 | Cliente HTTP para FastAPI |
-| pg | ^8.16 | Cliente PostgreSQL |
-| dotenv | ^16.5 | Variables de entorno |
-| morgan | ^1.10 | Logger HTTP (dev) |
+| express | ^4.21.0 | Framework HTTP |
+| axios | ^1.7.0 | Cliente HTTP para FastAPI |
+| pg | ^8.13.0 | Cliente PostgreSQL |
+| dotenv | ^16.4.0 | Variables de entorno |
+| morgan | ^1.10.0 | Logger HTTP (dev) |
 
 ### FastAPI Worker (Python)
 
-| Paquete | Version | Descripcion |
-|---------|---------|-------------|
-| fastapi | ^0.115 | Framework API asincrono |
-| uvicorn | ^0.35 | Servidor ASGI |
-| pydantic | ^2.11 | Validacion de modelos |
-| python-dotenv | ^1.1 | Variables de entorno |
+`fastapi-worker/requirements.txt` no fija versiones exactas (`pip install -r` toma la mas reciente). Versiones con las que se ha probado el sistema:
+
+| Paquete | Probado con | Descripcion |
+|---------|-------------|-------------|
+| fastapi | 0.139.2 | Framework API asincrono |
+| uvicorn[standard] | 0.51.0 | Servidor ASGI |
+| pydantic | 2.13.4 | Validacion de modelos |
+| python-dotenv | 1.2.2 | Variables de entorno |
+
+Los scripts de `ALGORITMOS_DE_OPTIMIZACION/` usan ademas **numpy** (se instala aparte si el script lo requiere).
 
 ### Requisitos del sistema
 
@@ -57,6 +63,15 @@ Frontend (React)
 - **PostgreSQL** >= 17 (con usuario `postgres` y password `abc123`)
 - **ngspice** en una ruta accesible (ver seccion ngspice mas abajo)
 
+### Instalacion de prerequisitos (desde cero)
+
+Si instalas desde cero en Windows:
+
+1. **Node.js LTS** — descargar e instalar desde https://nodejs.org/ . Verificar con `node --version`.
+2. **Python 3.13+** — descargar desde https://www.python.org/downloads/ . **Importante:** activar la casilla *Add python.exe to PATH* durante la instalacion. Verificar con `python --version`.
+3. **PostgreSQL 17** — instalar con el instalador EDB desde https://www.postgresql.org/download/windows/ . Durante la instalacion te pide una password para el superusuario `postgres`; usa `abc123` (o pon la tuya y ajusta `API/.env`). Deja el puerto por defecto `5432`. Verificar con `pg_isready -h localhost -p 5432`.
+4. **ngspice** — descargar desde https://sourceforge.net/projects/ngspice/files/ng-spice-rework/ (version 41 o superior). Se recomienda descomprimirlo en una ruta sin espacios, por ejemplo `C:\PROGRAMAS_UNI\Spice64\`, y apuntar `NGSPICE_PATH` del `.env` del worker a su `bin\ngspice.exe`.
+
 ---
 
 ## Estructura de archivos
@@ -64,7 +79,7 @@ Frontend (React)
 ```
 API/
 ├── package.json
-├── .env                          <-- credenciales DB + URL FastAPI
+├── .env                          <-- credenciales DB + URL FastAPI (gitignored, crearlo manualmente)
 ├── README.md                     <-- este archivo
 └── src/
     ├── index.js                  <-- punto de entrada Express
@@ -83,7 +98,7 @@ API/
 
 fastapi-worker/
 ├── requirements.txt
-├── .env                          <-- NGSPICE_PATH, WORKSPACE_DIR
+├── .env                          <-- NGSPICE_PATH, WORKSPACE_DIR (gitignored, crearlo manualmente)
 ├── run.ps1                       <-- arranque independiente del worker
 └── app/
     ├── main.py                   <-- FastAPI app + lifespan
@@ -106,6 +121,24 @@ fastapi-worker/
 ---
 
 ## Base de datos
+
+### Creacion paso a paso (primera vez)
+
+Si la base de datos todavia no existe en tu maquina local:
+
+```powershell
+# 1. Crea la base de datos (usa la password que configuraste al instalar PostgreSQL)
+$env:PGPASSWORD = 'abc123'
+psql -U postgres -c "CREATE DATABASE optimizacion_circuitos;"
+
+# 2. Carga el DDL (crea las tablas y siembra las 4 plantillas de filtro)
+psql -U postgres -d optimizacion_circuitos -f MODELOS_DE_DATOS\VERSIONADO_INTERNO\postgres-ddl-v2.sql
+
+# 3. Verifica: deberia listar PASA_BAJA, PASA_ALTA, PASA_BANDA, RECHAZO_BANDA
+psql -U postgres -d optimizacion_circuitos -c "SELECT tipo_filtro FROM plantilla_filtro;"
+```
+
+> Ejecuta los comandos desde la raiz del repositorio (`C:\miniproyecto-optimizacion`). El DDL **no** incluye `CREATE DATABASE`; esa se crea manualmente como en el paso 1.
 
 ### Esquema
 
@@ -141,7 +174,7 @@ DB_NAME=optimizacion_circuitos
 DB_USER=postgres
 DB_PASSWORD=abc123
 PORT=3000
-FASTAPI_URL=http://localhost:8000
+FASTAPI_URL=http://localhost:8001
 ```
 
 Si falta alguna variable, `postgrs.js` usa estos fallbacks:
@@ -248,7 +281,7 @@ Respuesta:
 - Si termina bien, cambia estado a `COMPLETADO` y guarda el `resultado`.
 - Timeout del worker: **5 minutos** (300,000 ms).
 
-### FastAPI Worker (port 8000)
+### FastAPI Worker (port 8001)
 
 | Metodo | Ruta | Descripcion |
 |--------|------|-------------|
@@ -256,19 +289,25 @@ Respuesta:
 | POST | `/validate` | Valida sin ejecutar (debug) |
 | POST | `/optimize` | Valida + ejecuta el algoritmo |
 
-Swagger UI: http://localhost:8000/docs
+Swagger UI: http://localhost:8001/docs
 
 ---
 
 ## ngspice
 
-El ejecutable de ngspice se configura en `fastapi-worker/.env` con la variable `NGSPICE_PATH`:
+El ejecutable de ngspice se configura en `fastapi-worker/.env`. Este archivo **no viene en el repo** (esta en `.gitignore`); crealo en `fastapi-worker/.env` con:
 
 ```env
 NGSPICE_PATH=C:\PROGRAMAS_UNI\Spice64\bin\ngspice.exe
+WORKSPACE_DIR=tempwork
 ```
 
-Si ngspice esta en otra ubicacion, **cambiar este valor en el `.env` del worker**. El directorio del ejecutable se inyecta automaticamente al `PATH` del subprocess que ejecuta cada script Python.
+| Variable | Default si falta | Descripcion |
+|----------|------------------|-------------|
+| `NGSPICE_PATH` | `C:\PROGRAMAS_UNI\Spice64\bin\ngspice.exe` | Ruta completa al ejecutable de ngspice |
+| `WORKSPACE_DIR` | `tempwork` | Directorio base de trabajo temporal |
+
+Si ngspice esta en otra ubicacion, **cambiar el valor de `NGSPICE_PATH`**. El directorio del ejecutable se inyecta automaticamente al `PATH` del subprocess que ejecuta cada script Python.
 
 **ngspice no es thread-safe.** El FastAPI Worker usa un `asyncio.Lock` global para garantizar que solo un subprocess de ngspice se ejecute a la vez. Si se envian dos solicitudes de optimizacion simultaneas, la segunda espera a que termine la primera.
 
@@ -417,14 +456,32 @@ Esto:
 ### Inicio individual
 
 **Solo FastAPI Worker:**
+
+Primera vez (crear entorno virtual):
+```powershell
+cd fastapi-worker
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
+```
+
+Si ya existe `.venv`:
 ```powershell
 cd fastapi-worker
 .\run.ps1
 ```
 
-Si no existe `.venv`, lo crea automaticamente e instala dependencias.
-
 **Solo Express API:**
+
+Primera vez (instalar dependencias):
+```powershell
+cd API
+npm install
+node src/index.js
+```
+
+Si ya existen `node_modules`:
 ```powershell
 cd API
 node src/index.js
@@ -451,8 +508,8 @@ $body = @{
         entorno = @{ v_fuente = 10; r_fuente = 10000; r_carga = 10000 }
         barrido_ac = @{ f_inicial = 100; f_final = 10000000 }
         parametros_optimizador = @(
-            @{ clave = "tam_poblacion"; valor = 50 }
-            @{ clave = "num_generaciones"; valor = 200 }
+            @{ clave = "tam_poblacion"; valor = 5 }
+            @{ clave = "num_generaciones"; valor =  10 }
             @{ clave = "prob_cruce"; valor = 0.9 }
             @{ clave = "prob_mutacion"; valor = 0.1 }
             @{ clave = "elitismo"; valor = 2 }
@@ -464,11 +521,12 @@ $body = @{
     }
 } | ConvertTo-Json -Depth 10
 
-# Guardar el ID que retorna la respuesta
+# Copia el ID que retorna la respuesta
 $ejecucion = Invoke-RestMethod -Uri "http://localhost:3000/api/ejecuciones" -Method POST -Body $body -ContentType "application/json"
 $id = $ejecucion.ejecucion_id
+Write-Host "ID: $id"
 
-# Ejecutar la optimizacion
+# Ejecutar la optimizacion reemplazando "$id" por el ID copiado en el paso anterior
 Invoke-RestMethod -Uri "http://localhost:3000/api/ejecuciones/$id/ejecutar" -Method POST
 ```
 
@@ -478,8 +536,7 @@ Invoke-RestMethod -Uri "http://localhost:3000/api/ejecuciones/$id/ejecutar" -Met
 
 ### Seguridad
 
-- `API_SECRET_KEY` en `fastapi-worker/.env` esta definido pero **no se usa actualmente**. Es un placeholder para futura autenticacion entre Express y FastAPI.
-- La password de PostgreSQL (`abc123`) esta en texto plano en `.env`. No commitear este archivo a repositorios publicos.
+- La password de PostgreSQL (`abc123`) esta en texto plano en `.env`. No commitear este archivo a repositorios publicos (ambos `.env`, API y worker, estan en `.gitignore`).
 
 ### Comportamiento al fallo
 

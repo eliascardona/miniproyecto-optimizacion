@@ -10,6 +10,16 @@ El presente mini-proyecto de investigación e ingeniería plantea el desarrollo 
 
 Este repositorio se ha creado con la intención de generar un control de versiones para los códigos desarrollados para atender las necesidades del mini-proyecto.
 
+## Guía de instalación y arranque
+
+Si quieres correr el sistema completo (API + Worker + Base de datos) en tu máquina local, sigue la guía paso a paso en:
+
+```
+API/README.md
+```
+
+Ahí encontrarás: instalación de prerequisitos (Node.js, Python, PostgreSQL, ngspice), creación de la base de datos, configuración de archivos `.env`, y comandos para levantar cada servicio.
+
 ## Estructura general del repositorio
 
 ```

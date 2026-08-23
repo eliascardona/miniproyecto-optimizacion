@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Node
+node_modules/
+
+# Entornos locales
+.env
+
+# Workspaces temporales del worker
+tempwork/
