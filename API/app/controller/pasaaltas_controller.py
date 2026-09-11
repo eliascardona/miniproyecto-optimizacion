@@ -1,10 +1,11 @@
-from typing import Union
-from fastapi import HTTPException, status
-
-from app.pydantic_schema.global_validator import safe_parse
-from app.pydantic_schema.api_request_schema.pasaaltas import PasaAltasConfiguration
-from API.app.preparation_service.pasa_altas import PasaAltasPreparationService
-
+"""
+Controlador del filtro pasa-altas. Responsabilidades:
+  - Recibir el request_data crudo desde la ruta FastAPI.
+  - Delegar TODA la lógica al servicio.
+  - Empaquetar el resultado del servicio en la respuesta Pydantic de salida.
+"""
+from app.preparation_service.pasa_altas_service import PasaAltasPreparationService
+from app.pydantic_schema.api_response_schema.pasaaltas import PasaAltasResponse
 
 
 class PasaAltasController:
@@ -12,10 +13,20 @@ class PasaAltasController:
     def __init__(self):
         self.algorithm_preparation_service = PasaAltasPreparationService()
 
-    def execute_algorithm(self, request_data):
-
-        customer = self.algorithm_preparation_service.validate_json_config(
+    def optimize_pasaaltas(self, request_data: dict) -> PasaAltasResponse:
+        # 1. Validar y obtener la configuración normalizada
+        circuit_config = self.algorithm_preparation_service.validate_json_config(
             request_data,
         )
 
-        return CustomerResponse(**customer)
+        # 2. Extraer los componentes del archivo .cir
+        componentes_ag = self.algorithm_preparation_service.extract_components()
+
+        # 3. Ejecutar el algoritmo genético completo
+        optimization_result = self.algorithm_preparation_service.run_optimization(
+            cfg=circuit_config,
+            componentes_ag=componentes_ag,
+        )
+
+        # 4. Mapear el resultado al schema de respuesta
+        return PasaAltasResponse(**optimization_result)
