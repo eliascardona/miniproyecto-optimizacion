@@ -15,19 +15,20 @@ from pathlib import Path
 import re
 
 from app.pydantic_schema.global_validator import safe_parse
-from app.pydantic_schema.api_request_schema.pasaaltas import PasaAltasConfiguration
+from app.pydantic_schema.api_request_schema.algorithm_config.pasaaltas import PasaAltasConfiguration
 from app.constants_repository import ConstantsRepository
 
-from app.utils.commercial_series import SERIE_E6, SERIE_E12
-from app.utils.genetic_operators import (
+from app.utils.genetico.commercial_series import SERIE_E6, SERIE_E12
+from app.utils.genetico.genetic_operators import (
     crear_individuo,
     seleccion_torneo,
     cruzar,
     mutar,
 )
-from app.utils.fitness import fitness_fc, fitness_paso_aten
+from app.utils.genetico.pasa_altas.fitness import fitness_fc, fitness_paso_aten
 from app.utils.spice_runner import actualizar_circuito, ejecutar_spice
-from app.utils.result_exporter import graficar_resultado, guardar_resultado_json
+from app.utils.genetico.pasa_altas.result_exporter import graficar_resultado, guardar_resultado_json
+from app.pydantic_schema.api_request_schema.circuit_optimization_request import CircuitOptimizationRequest
 
 
 class PasaAltasPreparationService:

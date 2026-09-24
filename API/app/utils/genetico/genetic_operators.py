@@ -5,7 +5,7 @@ Funciones puras sin estado; reciben todo lo que necesitan como argumentos.
 """
 import random
 
-from app.utils.commercial_series import SERIE_E6, SERIE_E12
+from app.utils.genetico.commercial_series import SERIE_E6, SERIE_E12
 
 
 # ---------------------------------------------------------------------------

@@ -9,8 +9,8 @@ from pathlib import Path
 
 import numpy as np
 
-from app.utils.commercial_series import SERIE_E6, SERIE_E12
-from app.utils.metrics import calcular_metricas_fc, calcular_metricas_paso_aten
+from app.utils.genetico.commercial_series import SERIE_E6, SERIE_E12
+from app.utils.genetico.pasa_altas.metrics import calcular_metricas_fc, calcular_metricas_paso_aten
 
 
 # ---------------------------------------------------------------------------

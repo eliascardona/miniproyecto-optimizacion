@@ -8,7 +8,7 @@ import subprocess
 from pathlib import Path
 
 from app.utils.genetico.commercial_series import SERIE_E6, SERIE_E12
-from app.utils.spice_formatter import valor_spice, valor_frecuencia
+from app.utils.genetico.spice_formatter import valor_spice, valor_frecuencia
 
 
 def actualizar_circuito(
