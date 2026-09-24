@@ -1,5 +1,6 @@
 from pydantic import BaseModel
-from typing import Union
+from typing import Union, Literal
+from enum import Enum
 
 class Entorno(BaseModel):
     v_fuente: float
@@ -20,3 +21,8 @@ class PasaAltasConfiguration(BaseModel):
     barrido_ac: BarridoAC
     parametros_optimizador: list[Par]
     frecuencias: list[Par]
+
+class PasaAltasRequest(BaseModel):
+    filtro: Literal['pasa_altas']
+    algoritmo: Literal['algoritmo_genetico']
+    entorno: PasaAltasConfiguration

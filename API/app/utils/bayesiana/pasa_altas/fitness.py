@@ -4,7 +4,7 @@ Utilería: cálculo de fitness para cada individuo del AG.
 Recibe todo el contexto como argumentos; no mantiene estado propio.
 """
 from app.utils.spice_runner import actualizar_circuito, ejecutar_spice
-from app.utils.metrics import calcular_metricas_fc, calcular_metricas_paso_aten
+from app.utils.genetico.pasa_altas.metrics import calcular_metricas_fc, calcular_metricas_paso_aten
 
 # Pendiente teórica máxima de un pasa-altas Sallen-Key de 4.º orden
 # (dos etapas de 2.º orden en cascada): 80 dB/dec.

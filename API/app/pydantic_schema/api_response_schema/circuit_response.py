@@ -12,7 +12,7 @@ class ComponenteOptimizado(BaseModel):
     valor: float = Field(..., description="Valor numérico del componente")
  
  
-class PasaAltasResponse(BaseModel):
+class CircuitoOptimizadoResponse(BaseModel):
     fitness: float = Field(..., description="Valor de aptitud del resultado (0.0 - 1.0)")
     frecuencias_obtenidas: List[FrecuenciaObtenida] = Field(
         ..., description="Lista de frecuencias obtenidas tras la optimización"
