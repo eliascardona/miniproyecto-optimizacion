@@ -13,3 +13,5 @@ def create_app() -> FastAPI:
     app.include_router(unique_entrypoint)
 
     return app
+
+app = create_app()

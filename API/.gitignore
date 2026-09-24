@@ -9,3 +9,5 @@
 # environment variables must be ignored, as they might contain
 # sensitive data, such as software secrets or execution parameters
 .env*
+
+**/__pyache__/
