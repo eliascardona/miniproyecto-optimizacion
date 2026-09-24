@@ -1,0 +1,48 @@
+{
+  "modo": "AVANZADO",
+  "entorno": {
+    "v_fuente": 6.0,
+    "r_fuente": 680.0,
+    "r_carga": 680.0
+  },
+  "barrido_ac": {
+    "f_inicial": 1.0,
+    "f_final": 1000000.0
+  },
+  "parametros_optimizador": [
+    {
+      "clave": "n_iniciales",
+      "valor": 10
+    },
+    {
+      "clave": "n_iteraciones",
+      "valor": 30
+    },
+    {
+      "clave": "xi",
+      "valor": 0.01
+    },
+    {
+      "clave": "n_candidatos",
+      "valor": 3000
+    },
+    {
+      "clave": "n_restarts",
+      "valor": 5
+    },
+    {
+      "clave": "semilla",
+      "valor": 42
+    }
+  ],
+  "frecuencias": [
+    {
+      "clave": "f_aten",
+      "valor": 200.0
+    },
+    {
+      "clave": "f_paso",
+      "valor": 2000.0
+    }
+  ]
+}
