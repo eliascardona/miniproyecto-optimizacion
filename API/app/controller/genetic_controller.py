@@ -28,6 +28,10 @@ class GeneticController:
 
         circuit_config = service.validate_json_config(request.entorno)
         componentes = service.extract_components()
-        result = service.run_optimization(cfg=circuit_config, componentes_ag=componentes)
+
+        try:
+            result = service.run_optimization(cfg=circuit_config, componentes_ag=componentes)
+        except RuntimeError as e:
+            raise HTTPException(status_code=500, detail=str(e))
 
         return CircuitoOptimizadoResponse(**result)

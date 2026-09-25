@@ -4,10 +4,10 @@ NGSPICE_EXE = r"C:\SPICE_ELECTRONICS\Spice64\bin\ngspice.exe"
 ARCHIVO_CIR = r"C:\Users\elias\Documents\ESCUELA\servicio-social\miniproyecto-optimizacion\API\app\constants_repository\filtro.cir"
 ARCHIVO_DATOS = r"C:\Users\elias\Documents\ESCUELA\servicio-social\miniproyecto-optimizacion\API\app\constants_repository\datos_filtro.txt"
 ARCHIVO_CONFIG_JSON = "config.json"
-ARCHIVO_RESULTADO_JSON = "config.json"
+ARCHIVO_RESULTADO_JSON = "resultado.json"
 
 # Gráfica de la respuesta final del filtro optimizado
-GRAFICA_ARCHIVO = "resultado_filtro.png"   # ruta donde se guarda la imagen
+GRAFICA_ARCHIVO = r"C:\Users\elias\Documents\ESCUELA\servicio-social\miniproyecto-optimizacion\API\app\constants_repository\resultado_filtro.png"
 
 # JSON con el resumen del resultado de la optimización
 ARCHIVO_RESULTADO_JSON = "resultado.json"

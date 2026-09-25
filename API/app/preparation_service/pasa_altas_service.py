@@ -66,8 +66,32 @@ class PasaAltasPreparationService:
                     partes = linea.split()
                     tipo = "R" if nombre.upper().startswith("R") else "C"
                     nodos = partes[1:3]
-                    detectados.append({"nombre": nombre, "tipo": tipo, "nodos": nodos})
+                    detectados.append({
+                        "nombre": nombre,
+                        "tipo": tipo,
+                        "nodos": nodos,
+                        "es_shunt": "0" in nodos,  # derivado de la topología real, no del nombre
+                    })
         return detectados
+
+    # def extract_components(self) -> list[dict]:
+    #     archivo_cir = self.constants_repository.get_archivo_cir()
+    #     texto = Path(archivo_cir).read_text()
+    #     detectados = []
+    #     fijos = {"RS", "RL", "VS", "VPP", "VNN"}
+    #     patron = r"^([CR][a-zA-Z0-9_]*)\s+"
+
+    #     for linea in texto.splitlines():
+    #         linea = linea.strip()
+    #         m = re.match(patron, linea)
+    #         if m:
+    #             nombre = m.group(1)
+    #             if nombre.upper() not in fijos:
+    #                 partes = linea.split()
+    #                 tipo = "R" if nombre.upper().startswith("R") else "C"
+    #                 nodos = partes[1:3]
+    #                 detectados.append({"nombre": nombre, "tipo": tipo, "nodos": nodos})
+    #     return detectados
 
     # ------------------------------------------------------------------
     # Construcción del contexto de ejecución
@@ -299,7 +323,6 @@ class PasaAltasPreparationService:
             modo=ctx["modo"],
             archivo_datos=repo.get_archivo_datos(),
             archivo_grafica=repo.get_grafica_archivo(),
-            archivo_salida=repo.get_resultado_json(),
             f_paso=ctx.get("f_paso"),
             f_aten=ctx.get("f_aten"),
         )
