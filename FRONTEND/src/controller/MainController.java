@@ -1,10 +1,13 @@
 package controller;
 
-import api.CircuitApiClient;
+import api_client.ApiConfig;
+import api_client.CircuitApiClient;
+import dto.CircuitRequest;
 import dto.OptimizationResult;
 import format_converter.FormatConverter;
 import model.Circuit;
 import model.Element;
+import model.IdealFilter;
 import model.Simulation;
 import view.GenerateCircuitPanel;
 import view.InputCircuitPanel;
@@ -95,8 +98,12 @@ public class MainController implements ActionListener {
                 // Aquí es donde antes se armaba el comando y se invocaba
                 // "src\resource\algorithm\main.exe -g ...". Esa ejecución del
                 // binario legado se eliminó por completo; en su lugar se llama
-                // a la API de optimización (ver generateCircuitViaApi()).
-                generateCircuitViaApi();
+                // a la API de optimización (ver generateCircuitViaApi()). Se
+                // pasa el propio GenerateCircuitPanel porque ahí viven los 6
+                // spinners nuevos de hiperparámetros del AG (tam_poblacion,
+                // num_generaciones, prob_cruce, prob_mutacion, elitismo,
+                // torneo_k), que no tienen un objeto modelo propio.
+                generateCircuitViaApi(generateCircuitController.generateCircuitPanel);
             }
         }
 
@@ -150,8 +157,41 @@ public class MainController implements ActionListener {
      * de optimización en Python. Corre en un SwingWorker para no congelar la
      * interfaz (el "while(process.isAlive())" original bloqueaba el EDT; una
      * llamada de red que puede tardar varios minutos lo haría aún peor).
+     *
+     * @param generateCircuitPanel el diálogo que el usuario acaba de cerrar
+     *                              con "Generate"; de ahí se leen los 6
+     *                              spinners de hiperparámetros del AG.
      */
-    private void generateCircuitViaApi() {
+    private void generateCircuitViaApi(GenerateCircuitPanel generateCircuitPanel) {
+        if (frame.circuit.getIdealFilter().getType() != 1) {
+            // type == 0 -> "Low Passes". Hoy el backend solo tiene registrado
+            // el servicio "pasa_altas" en GeneticController.SERVICE_MAP (la
+            // entrada de "pasa_bajas" está comentada / no implementada). Este
+            // chequeo antes vivía dentro de CircuitApiClient, pero al pasar a
+            // CircuitRequest (que no carga el tipo de filtro, porque el JSON
+            // de salida siempre manda "filtro": "pasa_altas" fijo) se movió
+            // aquí, donde sí se tiene acceso a IdealFilter. Ventaja extra:
+            // falla rápido, sin llegar a abrir el diálogo de carga.
+            JOptionPane.showMessageDialog(frame,
+                    "La API todavía no soporta filtros 'Low Passes' (pasa bajas); " +
+                            "solo está implementado 'High Passes' (pasa altas). " +
+                            "Cambia el tipo de filtro o ajusta las frecuencias para que " +
+                            "quede seleccionado 'High Passes'.",
+                    "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        CircuitRequest request;
+        try {
+            request = construirCircuitRequest(generateCircuitPanel);
+        } catch (IllegalArgumentException ex) {
+            // CircuitRequest valida rangos (prob_cruce entre 0 y 1, elitismo
+            // <= tam_poblacion, etc.) en su propio constructor; si algo no
+            // cuadra, se avisa aquí en vez de mandar una petición inválida.
+            JOptionPane.showMessageDialog(frame, ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
         CircuitApiClient apiClient = new CircuitApiClient();
         LoadingDialog loadingDialog = new LoadingDialog(frame,
                 "Optimizando circuito (puede tardar varios minutos)...");
@@ -159,7 +199,7 @@ public class MainController implements ActionListener {
         SwingWorker<OptimizationResult, Void> worker = new SwingWorker<>() {
             @Override
             protected OptimizationResult doInBackground() throws Exception {
-                return apiClient.optimizarPasaAltas(frame.circuit);
+                return apiClient.optimizarPasaAltas(request);
             }
 
             @Override
@@ -185,6 +225,38 @@ public class MainController implements ActionListener {
     }
 
     /**
+     * Junta el entorno físico y el barrido (Simulation), las frecuencias
+     * objetivo (IdealFilter) y los 6 hiperparámetros del AG (leídos
+     * directamente de los spinners nuevos de GenerateCircuitPanel, sin
+     * ChangeListener de por medio — ver el comentario en esa clase) en un
+     * único CircuitRequest, que es lo único que CircuitApiClient necesita
+     * para armar la petición.
+     */
+    private CircuitRequest construirCircuitRequest(GenerateCircuitPanel generateCircuitPanel) {
+        Simulation simulacion = frame.circuit.getSimulation();
+        IdealFilter idealFilter = frame.circuit.getIdealFilter();
+
+        return new CircuitRequest(
+                ApiConfig.ALGORITMO_GENETICO,
+                ApiConfig.FILTRO_PASA_ALTAS,
+                ApiConfig.MODO_AVANZADO,
+                simulacion.getSupplyVoltage(),
+                simulacion.getSupplyResistance(),
+                simulacion.getLoadResistance(),
+                simulacion.getInitialFrequency(),
+                simulacion.getFinalFrequency(),
+                idealFilter.getAttenuationFrequency(),
+                idealFilter.getPassageFrequency(),
+                (int) generateCircuitPanel.tamPoblacion.getValue(),
+                (int) generateCircuitPanel.numGeneraciones.getValue(),
+                (double) generateCircuitPanel.probCruce.getValue(),
+                (double) generateCircuitPanel.probMutacion.getValue(),
+                (int) generateCircuitPanel.elitismo.getValue(),
+                (int) generateCircuitPanel.torneoK.getValue()
+        );
+    }
+
+    /**
      * Aplica el resultado de la API al modelo de dibujo: construye la lista de
      * Element a partir de los componentes optimizados (FormatConverter traduce
      * el valor físico real + conexión a tierra del JSON a los índices que
@@ -201,7 +273,7 @@ public class MainController implements ActionListener {
             frame.circuit.addElement(elemento);
         }
 
-        frame.circuit.setCodedCircuit(FormatConverter.convertir(elementos));
+        frame.circuit.setCodedCircuit(FormatConverter.toCodedCircuitString(elementos));
         frame.circuit.setFitness(result.fitness);
         frame.circuit.setElements(elementos.size());
         // circuit.order no se toca: nada en la UI lo lee hoy fuera del parser
