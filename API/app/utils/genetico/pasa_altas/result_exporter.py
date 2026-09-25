@@ -5,6 +5,7 @@ No mantiene estado; recibe todo como argumentos.
 """
 import base64
 import json
+import traceback
 from pathlib import Path
 
 import numpy as np
@@ -97,8 +98,9 @@ def graficar_resultado(
 def _codificar_imagen_base64(ruta_imagen: str) -> str | None:
     try:
         return base64.b64encode(Path(ruta_imagen).read_bytes()).decode("ascii")
-    except Exception as e:
-        print(f"[AVISO] No se pudo codificar la imagen '{ruta_imagen}' en base64: {e}")
+    except Exception:
+        print(f"[AVISO] No se pudo codificar la imagen '{ruta_imagen}' en base64:")
+        traceback.print_exc()
         return None
 
 
@@ -109,43 +111,45 @@ def guardar_resultado_json(
     modo: str,
     archivo_datos: str,
     archivo_grafica: str,
-    archivo_salida: str,
     f_paso: float | None = None,
     f_aten: float | None = None,
 ) -> dict:
-    """
-    Genera y escribe el JSON de resumen de la optimización.
-    Devuelve el diccionario generado para que el servicio lo consuma directamente.
-    """
     componentes_optimizados = [
         {
             "nombre": comp["nombre"],
-            "valor": (SERIE_E12 if comp["tipo"] == "R" else SERIE_E6)[mejor_global[i]],
+            "tipo": comp["tipo"],
+            "valor": float((SERIE_E12 if comp["tipo"] == "R" else SERIE_E6)[mejor_global[i]]),
+            "conexion_tierra": comp["es_shunt"],
         }
         for i, comp in enumerate(componentes_ag)
     ]
 
     if modo == "BASICO":
         fc_real, _, _, _ = calcular_metricas_fc(archivo_datos)
-        frecuencias_obtenidas = [{"clave": "fc_obtenida", "valor": fc_real}]
+        frecuencias_obtenidas = [{"clave": "fc_obtenida", "valor": float(fc_real)}]
     else:
         _, amp_paso, amp_aten, _, _ = calcular_metricas_paso_aten(
             archivo_datos, f_paso, f_aten
         )
         frecuencias_obtenidas = [
-            {"clave": "amp_paso_obtenida", "valor": amp_paso},
-            {"clave": "amp_aten_obtenida", "valor": amp_aten},
+            {"clave": "amp_paso_obtenida", "valor": float(amp_paso)},
+            {"clave": "amp_aten_obtenida", "valor": float(amp_aten)},
         ]
 
+    grafica_b64 = _codificar_imagen_base64(archivo_grafica)
+    if grafica_b64 is None:
+        # Falla explícita y clara, en vez de dejar que Pydantic
+        # reviente después con un mensaje confuso.
+        raise RuntimeError(
+            f"No se pudo generar/leer la gráfica en '{archivo_grafica}'. "
+            "Revisa que graficar_resultado() la haya guardado correctamente."
+        )
+
     resultado = {
-        "fitness": mejor_fit,
+        "fitness": float(mejor_fit),
         "frecuencias_obtenidas": frecuencias_obtenidas,
         "componentes_optimizados": componentes_optimizados,
-        "grafica_png_base64": _codificar_imagen_base64(archivo_grafica),
+        "grafica_png_base64": grafica_b64,
     }
 
-    Path(archivo_salida).write_text(
-        json.dumps(resultado, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
-    print(f"Resultado guardado en: {archivo_salida}")
     return resultado
