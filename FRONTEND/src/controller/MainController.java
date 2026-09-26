@@ -5,10 +5,14 @@ import api_client.CircuitApiClient;
 import dto.CircuitRequest;
 import dto.OptimizationResult;
 import format_converter.FormatConverter;
+import model.Algoritmo;
 import model.Circuit;
 import model.Element;
 import model.IdealFilter;
+import model.ModoEjecucion;
 import model.Simulation;
+import model.TipoFiltro;
+import view.AlgorithmSelectionPanel;
 import view.GenerateCircuitPanel;
 import view.InputCircuitPanel;
 import view.LoadingDialog;
@@ -81,30 +85,7 @@ public class MainController implements ActionListener {
         }
 
         if(frame.generateCircuit.equals(e.getSource())) {
-            GenerateCircuitController generateCircuitController = new GenerateCircuitController(
-                    new GenerateCircuitPanel(frame.circuit));
-
-            int option = JOptionPane.showOptionDialog(
-                    null,
-                    generateCircuitController.generateCircuitPanel,
-                    "Input",
-                    JOptionPane.OK_CANCEL_OPTION,
-                    JOptionPane.PLAIN_MESSAGE,
-                    null,
-                    new Object[] {"Generate", "Cancel"},
-                    "Cancel");
-
-            if(option == JOptionPane.OK_OPTION) {
-                // Aquí es donde antes se armaba el comando y se invocaba
-                // "src\resource\algorithm\main.exe -g ...". Esa ejecución del
-                // binario legado se eliminó por completo; en su lugar se llama
-                // a la API de optimización (ver generateCircuitViaApi()). Se
-                // pasa el propio GenerateCircuitPanel porque ahí viven los 6
-                // spinners nuevos de hiperparámetros del AG (tam_poblacion,
-                // num_generaciones, prob_cruce, prob_mutacion, elitismo,
-                // torneo_k), que no tienen un objeto modelo propio.
-                generateCircuitViaApi(generateCircuitController.generateCircuitPanel);
-            }
+            generateCircuitFlow();
         }
 
         if(frame.inputCircuit.equals(e.getSource())) {
@@ -153,6 +134,110 @@ public class MainController implements ActionListener {
     // ------------------------------------------------------------------
 
     /**
+     * Menú inicial de "Generate circuit": primero pregunta el modo
+     * (probar los 4 algoritmos vs elegir uno puntual), luego muestra
+     * AlgorithmSelectionPanel para elegir filtro (siempre) y algoritmo
+     * (solo en modo específico), y recién después abre GenerateCircuitPanel
+     * con el resto del formulario (entorno físico + hiperparámetros del AG),
+     * igual que antes.
+     *
+     * "Probar todos los algoritmos" se deja armado en la interfaz (el
+     * usuario ve la pantalla completa, incluyendo elegir el filtro, tal
+     * como se pidió) pero se bloquea antes de llamar a la API, porque hoy
+     * no existe un endpoint en el backend que corra los 4 algoritmos y
+     * devuelva el mejor — GeneticController.SERVICE_MAP solo tiene
+     * registrado ("pasa_altas", "algoritmo_genetico"). Cuando ese endpoint
+     * exista, basta con quitar el primer "if" de abajo.
+     */
+    private void generateCircuitFlow() {
+        int modoOption = JOptionPane.showOptionDialog(
+                frame,
+                "What do you want to do?",
+                "Generate circuit",
+                JOptionPane.DEFAULT_OPTION,
+                JOptionPane.QUESTION_MESSAGE,
+                null,
+                new Object[] {"Try all algorithms", "Choose an algorithm", "Cancel"},
+                "Choose an algorithm");
+
+        if (modoOption != 0 && modoOption != 1) {
+            return; // Cancel, Esc, o cerró la ventana
+        }
+
+        ModoEjecucion modo = modoOption == 0
+                ? ModoEjecucion.TODOS_LOS_ALGORITMOS
+                : ModoEjecucion.ALGORITMO_ESPECIFICO;
+
+        AlgorithmSelectionPanel selectionPanel = new AlgorithmSelectionPanel(modo);
+        int selectionOption = JOptionPane.showOptionDialog(
+                frame,
+                selectionPanel,
+                "Selection",
+                JOptionPane.OK_CANCEL_OPTION,
+                JOptionPane.PLAIN_MESSAGE,
+                null,
+                new Object[] {"Continue", "Cancel"},
+                "Continue");
+
+        if (selectionOption != JOptionPane.OK_OPTION) {
+            return;
+        }
+
+        TipoFiltro tipoFiltroElegido = (TipoFiltro) selectionPanel.tipoFiltro.getSelectedItem();
+
+        if (modo == ModoEjecucion.TODOS_LOS_ALGORITMOS) {
+            JOptionPane.showMessageDialog(frame,
+                    "\"Try all algorithms\" is not implemented in the backend yet " +
+                            "(there is no endpoint that runs all 4 algorithms and compares results). " +
+                            "For now, use \"Choose an algorithm\".",
+                    "Not available yet", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        Algoritmo algoritmoElegido = (Algoritmo) selectionPanel.algoritmo.getSelectedItem();
+        if (!algoritmoElegido.implementadoEnBackend) {
+            JOptionPane.showMessageDialog(frame,
+                    "\"" + algoritmoElegido + "\" is not implemented in the backend yet " +
+                            "(GeneticController.SERVICE_MAP only registers algoritmo_genetico). " +
+                            "Choose \"Genetic algorithm\" for now.",
+                    "Not available yet", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        if (!tipoFiltroElegido.implementadoEnBackend) {
+            JOptionPane.showMessageDialog(frame,
+                    "\"" + tipoFiltroElegido + "\" is not implemented in the backend yet " +
+                            "(GeneticController.SERVICE_MAP only registers pasa_altas). " +
+                            "Choose \"High Passes\" for now.",
+                    "Not available yet", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        // Se usa como punto de partida de IdealFilter; GenerateCircuitController
+        // lo sigue recalculando en vivo a partir de las frecuencias de
+        // paso/atenuación mientras el diálogo de abajo está abierto, igual que
+        // ya hacía antes de este cambio.
+        frame.circuit.getIdealFilter().setType(tipoFiltroElegido.idealFilterType);
+
+        GenerateCircuitController generateCircuitController = new GenerateCircuitController(
+                new GenerateCircuitPanel(frame.circuit));
+
+        int option = JOptionPane.showOptionDialog(
+                null,
+                generateCircuitController.generateCircuitPanel,
+                "Input",
+                JOptionPane.OK_CANCEL_OPTION,
+                JOptionPane.PLAIN_MESSAGE,
+                null,
+                new Object[] {"Generate", "Cancel"},
+                "Cancel");
+
+        if (option == JOptionPane.OK_OPTION) {
+            generateCircuitViaApi(generateCircuitController.generateCircuitPanel, algoritmoElegido);
+        }
+    }
+
+    /**
      * Sustituye la invocación al binario legado por una llamada HTTP a la API
      * de optimización en Python. Corre en un SwingWorker para no congelar la
      * interfaz (el "while(process.isAlive())" original bloqueaba el EDT; una
@@ -161,29 +246,28 @@ public class MainController implements ActionListener {
      * @param generateCircuitPanel el diálogo que el usuario acaba de cerrar
      *                              con "Generate"; de ahí se leen los 6
      *                              spinners de hiperparámetros del AG.
+     * @param algoritmoElegido     el algoritmo elegido en generateCircuitFlow().
      */
-    private void generateCircuitViaApi(GenerateCircuitPanel generateCircuitPanel) {
-        if (frame.circuit.getIdealFilter().getType() != 1) {
-            // type == 0 -> "Low Passes". Hoy el backend solo tiene registrado
-            // el servicio "pasa_altas" en GeneticController.SERVICE_MAP (la
-            // entrada de "pasa_bajas" está comentada / no implementada). Este
-            // chequeo antes vivía dentro de CircuitApiClient, pero al pasar a
-            // CircuitRequest (que no carga el tipo de filtro, porque el JSON
-            // de salida siempre manda "filtro": "pasa_altas" fijo) se movió
-            // aquí, donde sí se tiene acceso a IdealFilter. Ventaja extra:
-            // falla rápido, sin llegar a abrir el diálogo de carga.
+    private void generateCircuitViaApi(GenerateCircuitPanel generateCircuitPanel, Algoritmo algoritmoElegido) {
+        // Segundo chequeo del mismo tipo de filtro: generateCircuitFlow() ya
+        // validó esto antes de abrir GenerateCircuitPanel, pero
+        // GenerateCircuitController puede haber recalculado IdealFilter.type
+        // en vivo mientras ese diálogo estuvo abierto (según las frecuencias
+        // de paso/atenuación que el usuario haya tecleado ahí), así que se
+        // vuelve a comprobar con el valor final antes de llamar a la API.
+        TipoFiltro tipoFiltroFinal = TipoFiltro.fromIdealFilterType(frame.circuit.getIdealFilter().getType());
+        if (!tipoFiltroFinal.implementadoEnBackend) {
             JOptionPane.showMessageDialog(frame,
-                    "La API todavía no soporta filtros 'Low Passes' (pasa bajas); " +
-                            "solo está implementado 'High Passes' (pasa altas). " +
-                            "Cambia el tipo de filtro o ajusta las frecuencias para que " +
-                            "quede seleccionado 'High Passes'.",
-                    "Error", JOptionPane.ERROR_MESSAGE);
+                    "\"" + tipoFiltroFinal + "\" is not implemented in the backend yet. " +
+                            "Adjust the passage/attenuation frequencies so the final filter " +
+                            "type stays \"High Passes\".",
+                    "Not available yet", JOptionPane.ERROR_MESSAGE);
             return;
         }
 
         CircuitRequest request;
         try {
-            request = construirCircuitRequest(generateCircuitPanel);
+            request = construirCircuitRequest(generateCircuitPanel, algoritmoElegido);
         } catch (IllegalArgumentException ex) {
             // CircuitRequest valida rangos (prob_cruce entre 0 y 1, elitismo
             // <= tam_poblacion, etc.) en su propio constructor; si algo no
@@ -229,16 +313,19 @@ public class MainController implements ActionListener {
      * objetivo (IdealFilter) y los 6 hiperparámetros del AG (leídos
      * directamente de los spinners nuevos de GenerateCircuitPanel, sin
      * ChangeListener de por medio — ver el comentario en esa clase) en un
-     * único CircuitRequest, que es lo único que CircuitApiClient necesita
-     * para armar la petición.
+     * único CircuitRequest. El algoritmo y el filtro ya no son constantes de
+     * ApiConfig: algoritmoElegido viene de generateCircuitFlow(), y el filtro
+     * se deriva del IdealFilter.type final (que puede haber cambiado en vivo
+     * dentro de GenerateCircuitPanel).
      */
-    private CircuitRequest construirCircuitRequest(GenerateCircuitPanel generateCircuitPanel) {
+    private CircuitRequest construirCircuitRequest(GenerateCircuitPanel generateCircuitPanel, Algoritmo algoritmoElegido) {
         Simulation simulacion = frame.circuit.getSimulation();
         IdealFilter idealFilter = frame.circuit.getIdealFilter();
+        TipoFiltro tipoFiltroFinal = TipoFiltro.fromIdealFilterType(idealFilter.getType());
 
         return new CircuitRequest(
-                ApiConfig.ALGORITMO_GENETICO,
-                ApiConfig.FILTRO_PASA_ALTAS,
+                algoritmoElegido.valorApi,
+                tipoFiltroFinal.valorApi,
                 ApiConfig.MODO_AVANZADO,
                 simulacion.getSupplyVoltage(),
                 simulacion.getSupplyResistance(),

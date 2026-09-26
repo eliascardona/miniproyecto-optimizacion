@@ -69,6 +69,7 @@ public class CircuitApiClient {
         HttpRequest httpRequest = HttpRequest.newBuilder()
                 .uri(URI.create(ApiConfig.BASE_URL + ApiConfig.OPTIMIZE_ENDPOINT))
                 .header("Content-Type", "application/json")
+                .version(HttpClient.Version.HTTP_1_1)
                 .timeout(Duration.ofSeconds(ApiConfig.REQUEST_TIMEOUT_SECONDS))
                 .POST(HttpRequest.BodyPublishers.ofString(requestJson))
                 .build();

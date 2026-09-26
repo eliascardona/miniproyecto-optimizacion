@@ -24,10 +24,12 @@ public final class ApiConfig {
     public static final String BASE_URL = "http://localhost:8082";
     public static final String OPTIMIZE_ENDPOINT = "/api/optimizar";
 
-    // --- Contrato de negocio (debe coincidir con GeneticController.SERVICE_MAP) ---
-    public static final String FILTRO_PASA_ALTAS = "pasa_altas";
-    public static final String ALGORITMO_GENETICO = "algoritmo_genetico";
-
+    // --- Contrato de negocio ---
+    // FILTRO_PASA_ALTAS y ALGORITMO_GENETICO se movieron a model.TipoFiltro y
+    // model.Algoritmo respectivamente (cada valor de esos enum trae su propio
+    // valorApi), para que el filtro y el algoritmo puedan variar según lo que
+    // el usuario elija en el menú inicial de "Generate circuit" en vez de
+    // quedar fijos aquí.
     public static final String MODO_BASICO = "BASICO";
     public static final String MODO_AVANZADO = "AVANZADO";
 
@@ -44,5 +46,5 @@ public final class ApiConfig {
     // El AG corre de forma síncrona en el servidor y puede tardar varios
     // minutos según num_generaciones/tam_poblacion; por eso el timeout de
     // la petición completa es mucho mayor que el de conexión.
-    public static final int REQUEST_TIMEOUT_SECONDS = 600;
+    public static final int REQUEST_TIMEOUT_SECONDS = 1200;
 }
