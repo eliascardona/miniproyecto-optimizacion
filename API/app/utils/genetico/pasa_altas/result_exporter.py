@@ -113,7 +113,15 @@ def guardar_resultado_json(
     archivo_grafica: str,
     f_paso: float | None = None,
     f_aten: float | None = None,
+    fc_objetivo: float | None = None,
+    amp_paso_objetivo: float | None = None,
+    amp_aten_objetivo: float | None = None,
 ) -> dict:
+    # fc_objetivo/amp_paso_objetivo/amp_aten_objetivo se aceptan sin usarse:
+    # GeneticPreparationService.run_optimization() reenvía el mismo
+    # ctx["frecuencias_ctx"] a graficar_resultado() (que sí los necesita
+    # para dibujar las líneas objetivo) y a esta función, así que ambas
+    # deben aceptar el mismo conjunto de claves aunque esta no las use.
     componentes_optimizados = [
         {
             "nombre": comp["nombre"],

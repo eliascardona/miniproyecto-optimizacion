@@ -101,10 +101,6 @@ class GeneticPreparationService:
         modo = str(cfg["modo"]).upper()
         entorno = cfg["entorno"]
         barrido = cfg["barrido_ac"]
-
-        def _buscar(lista, clave):
-            return next((p["valor"] for p in lista if p["clave"] == clave), None)
-
         params = cfg["parametros_optimizador"]
         frecuencias = cfg["frecuencias"]
 
@@ -122,23 +118,50 @@ class GeneticPreparationService:
             "f_inicial": float(barrido["f_inicial"]),
             "f_final": float(barrido["f_final"]),
             # AG
-            "tam_poblacion": int(_buscar(params, "tam_poblacion")),
-            "num_generaciones": int(_buscar(params, "num_generaciones")),
-            "prob_cruce": float(_buscar(params, "prob_cruce")),
-            "prob_mutacion": float(_buscar(params, "prob_mutacion")),
-            "elitismo": int(_buscar(params, "elitismo")),
-            "torneo_k": int(_buscar(params, "torneo_k")),
+            "tam_poblacion": int(self._buscar(params, "tam_poblacion")),
+            "num_generaciones": int(self._buscar(params, "num_generaciones")),
+            "prob_cruce": float(self._buscar(params, "prob_cruce")),
+            "prob_mutacion": float(self._buscar(params, "prob_mutacion")),
+            "elitismo": int(self._buscar(params, "elitismo")),
+            "torneo_k": int(self._buscar(params, "torneo_k")),
         }
 
-        if modo == "BASICO":
-            ctx["fc_objetivo"] = float(_buscar(frecuencias, "fc_objetivo"))
-        else:
-            ctx["f_paso"] = float(_buscar(frecuencias, "f_paso"))
-            ctx["f_aten"] = float(_buscar(frecuencias, "f_aten"))
-            ctx["amp_paso_objetivo"] = vs_valor
-            ctx["amp_aten_objetivo"] = 0.0
+        # Las frecuencias objetivo SÍ dependen de cada filtro (pasa_altas/
+        # pasa_bajas necesitan 1-2; pasa_banda necesita hasta 4, con otros
+        # nombres de clave). Se guardan en su propio dict, no sueltas en
+        # ctx, para que _evaluar()/run_optimization() sepan exactamente
+        # qué reenviar a los hooks del filtro sin tener que adivinar por
+        # exclusión qué claves son "de frecuencias" y cuáles no.
+        ctx["frecuencias_ctx"] = self._extraer_frecuencias(modo, frecuencias, vs_valor)
 
         return ctx
+
+    @staticmethod
+    def _buscar(lista: list[dict], clave: str):
+        """Busca un {clave, valor} por su 'clave' dentro de una lista (sirve
+        tanto para parametros_optimizador como para frecuencias)."""
+        return next((p["valor"] for p in lista if p["clave"] == clave), None)
+
+    def _extraer_frecuencias(self, modo: str, frecuencias: list[dict], vs_valor: float) -> dict:
+        """
+        Traduce la lista `frecuencias` del JSON a las claves que
+        fitness_fc/fitness_paso_aten y graficar_resultado/
+        guardar_resultado_json del filtro concreto esperan recibir.
+
+        Este default asume el shape que ya usan pasa_altas y pasa_bajas
+        (1 frecuencia objetivo en BASICO; f_paso/f_aten en AVANZADO).
+        Un filtro con un shape distinto (p.ej. pasa_banda, que necesita
+        2 y 4 frecuencias respectivamente) debe sobreescribir este método.
+        """
+        if modo == "BASICO":
+            return {"fc_objetivo": float(self._buscar(frecuencias, "fc_objetivo"))}
+        else:
+            return {
+                "f_paso": float(self._buscar(frecuencias, "f_paso")),
+                "f_aten": float(self._buscar(frecuencias, "f_aten")),
+                "amp_paso_objetivo": vs_valor,
+                "amp_aten_objetivo": 0.0,
+            }
 
     # ------------------------------------------------------------------
     # Fitness unificado (genérico: dispatcha a los hooks de la subclase)
@@ -162,15 +185,9 @@ class GeneticPreparationService:
         )
 
         if ctx["modo"] == "BASICO":
-            return self._fitness_fc(**shared, fc_objetivo=ctx["fc_objetivo"])
+            return self._fitness_fc(**shared, **ctx["frecuencias_ctx"])
         else:
-            return self._fitness_paso_aten(
-                **shared,
-                f_paso=ctx["f_paso"],
-                f_aten=ctx["f_aten"],
-                amp_paso_objetivo=ctx["amp_paso_objetivo"],
-                amp_aten_objetivo=ctx["amp_aten_objetivo"],
-            )
+            return self._fitness_paso_aten(**shared, **ctx["frecuencias_ctx"])
 
     # --- Hooks de fitness/exportación: cada subclase los reemplaza con
     # staticmethod(...) apuntando a sus propias utils.genetico.<filtro>.* ---
@@ -252,11 +269,7 @@ class GeneticPreparationService:
             archivo_salida=repo.get_grafica_archivo(),
             modo=ctx["modo"],
             vs_valor=ctx["vs_valor"],
-            fc_objetivo=ctx.get("fc_objetivo"),
-            f_paso=ctx.get("f_paso"),
-            f_aten=ctx.get("f_aten"),
-            amp_paso_objetivo=ctx.get("amp_paso_objetivo"),
-            amp_aten_objetivo=ctx.get("amp_aten_objetivo"),
+            **ctx["frecuencias_ctx"],
         )
 
         # Exportar JSON y devolver resultado (hook del filtro)
@@ -267,6 +280,5 @@ class GeneticPreparationService:
             modo=ctx["modo"],
             archivo_datos=repo.get_archivo_datos(),
             archivo_grafica=repo.get_grafica_archivo(),
-            f_paso=ctx.get("f_paso"),
-            f_aten=ctx.get("f_aten"),
+            **ctx["frecuencias_ctx"],
         )
