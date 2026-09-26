@@ -13,14 +13,10 @@ class FiltroEnum(str, Enum):
     rechaza_banda = "rechaza_banda"
 
 class AlgoritmoEnum(str, Enum):
-    algoritmo_genetico = "ag"
+    algoritmo_genetico = "algoritmo_genetico"
     bayesiana = "bayesiana"
     enjambre_particulas = "enjambre_particulas"
     recocido_simulado = "recocido_simulado"
-
-#class CircuitOptimizationRequest(BaseModel):
-#    peticion: Union[PasaAltasRequest, PasaBajasRequest] = Field(discriminator='algoritmo')
-
 
 FILTRO_ALGORITMO_MAP = {
     ("pasa_altas", "algoritmo_genetico"): PasaAltasRequest,

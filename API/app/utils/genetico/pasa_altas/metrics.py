@@ -6,6 +6,7 @@ No depende de ninguna otra capa ni de estado global; recibe todo lo que
 necesita como argumentos.
 """
 import numpy as np
+import traceback
 
 
 # ---------------------------------------------------------------------------
@@ -97,6 +98,12 @@ def calcular_metricas_fc(
 
         return float(fc_real), float(amp_max), float(pendiente), float(f_plano)
     except Exception:
+        # No se silencia sin dejar rastro: esto antes devolvía (None, 0.0, 0.0, 0.0)
+        # sin ninguna pista de qué falló, y en modo BASICO ese None terminaba
+        # provocando un TypeError no controlado más adelante (float(None) en
+        # guardar_resultado_json), en vez de un error claro.
+        print("[AVISO] calcular_metricas_fc falló; se usará (None, 0.0, 0.0, 0.0):")
+        traceback.print_exc()
         return None, 0.0, 0.0, 0.0
 
 
@@ -129,4 +136,6 @@ def calcular_metricas_paso_aten(
 
         return amp_max, amp_paso, amp_aten, float(pendiente[0]), float(f_plano)
     except Exception:
+        print("[AVISO] calcular_metricas_paso_aten falló; se usará (None, 0.0, 0.0, 0.0, 0.0):")
+        traceback.print_exc()
         return None, 0.0, 0.0, 0.0, 0.0

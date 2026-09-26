@@ -1,26 +1,36 @@
-from app.pydantic_schema.global_validator import safe_parse
+from pathlib import Path
+
+# Cada filtro tiene su propia subcarpeta con su .cir/lm741.lib (topologías
+# distintas), pero comparten el mismo ngspice instalado. Antes esto era fijo
+# a un solo filtro (pasa_altas); ahora ConstantsRepository(filtro) arma las
+# rutas dentro de esa subcarpeta, para que agregar un filtro nuevo solo
+# implique agregar una carpeta más, sin tocar esta clase.
+_DIRECTORIO_BASE = Path(__file__).resolve().parent
 
 NGSPICE_EXE = r"C:\SPICE_ELECTRONICS\Spice64\bin\ngspice.exe"
-ARCHIVO_CIR = r"C:\Users\elias\Documents\ESCUELA\servicio-social\miniproyecto-optimizacion\API\app\constants_repository\filtro.cir"
-ARCHIVO_DATOS = r"C:\Users\elias\Documents\ESCUELA\servicio-social\miniproyecto-optimizacion\API\app\constants_repository\datos_filtro.txt"
-ARCHIVO_CONFIG_JSON = "config.json"
-ARCHIVO_RESULTADO_JSON = "resultado.json"
-
-# Gráfica de la respuesta final del filtro optimizado
-GRAFICA_ARCHIVO = r"C:\Users\elias\Documents\ESCUELA\servicio-social\miniproyecto-optimizacion\API\app\constants_repository\resultado_filtro.png"
-
-# JSON con el resumen del resultado de la optimización
-ARCHIVO_RESULTADO_JSON = "resultado.json"
 
 
 class ConstantsRepository:
 
-    def __init__(self):
+    def __init__(self, filtro: str):
+        """
+        `filtro` debe coincidir con el nombre de una subcarpeta real bajo
+        constants_repository/ (hoy: "pasa_altas", "pasa_bajas"), que debe
+        contener su propio filtro.cir y lm741.lib.
+        """
+        directorio_filtro = _DIRECTORIO_BASE / filtro
+        if not directorio_filtro.is_dir():
+            raise ValueError(
+                f"No existe la carpeta de recursos para el filtro '{filtro}' "
+                f"(se esperaba: {directorio_filtro})"
+            )
+
+        self.filtro = filtro
         self.ngspice_exe = NGSPICE_EXE
-        self.archivo_datos = ARCHIVO_DATOS
-        self.archivo_cir = ARCHIVO_CIR
-        self.resultado_json = ARCHIVO_RESULTADO_JSON
-        self.grafica_archivo = GRAFICA_ARCHIVO
+        self.archivo_cir = str(directorio_filtro / "filtro.cir")
+        self.archivo_datos = str(directorio_filtro / "datos_filtro.txt")
+        self.resultado_json = str(directorio_filtro / "resultado.json")
+        self.grafica_archivo = str(directorio_filtro / "resultado_filtro.png")
 
     def get_archivo_cir(self):
         return self.archivo_cir
