@@ -9,6 +9,7 @@ from fastapi import HTTPException
 from app.preparation_service.pasa_altas_service import PasaAltasPreparationService
 from app.preparation_service.pasa_bajas_service import PasaBajasPreparationService
 from app.preparation_service.pasa_banda_service import PasaBandaPreparationService
+from app.preparation_service.rechaza_banda_service import RechazaBandaPreparationService
 from app.pydantic_schema.api_response_schema.circuit_response import CircuitoOptimizadoResponse
 from app.pydantic_schema.api_request_schema.circuit_optimization_request import CircuitOptimizationRequest
 
@@ -20,6 +21,7 @@ class GeneticController:
         ("pasa_altas", "algoritmo_genetico"): PasaAltasPreparationService,
         ("pasa_bajas", "algoritmo_genetico"): PasaBajasPreparationService,
         ("pasa_banda", "algoritmo_genetico"): PasaBandaPreparationService,
+        ("rechaza_banda", "algoritmo_genetico"): RechazaBandaPreparationService,
     }
 
     def optimize(self, request: CircuitOptimizationRequest) -> CircuitoOptimizadoResponse:
