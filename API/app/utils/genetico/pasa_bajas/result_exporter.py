@@ -1,17 +1,22 @@
 """
-Utilería: exportación de resultados (gráfica PNG + JSON de resumen).
+Utilería: exportación de resultados (gráfica PNG + JSON de resumen),
+filtro PASA-BAJAS.
+
+Mismo contrato de entrada/salida que utils.genetico.pasa_altas.result_exporter
+(mismos nombres de función, misma forma del dict de resultado), pero
+internamente usa las métricas de pasa_bajas (calcular_metricas_fc aquí
+devuelve una tupla de 5 elementos, no 4 — trae amp_dc además de amp_max).
 
 No mantiene estado; recibe todo como argumentos.
 """
 import base64
-import json
 import traceback
 from pathlib import Path
 
 import numpy as np
 
 from app.utils.genetico.commercial_series import SERIE_E6, SERIE_E12
-from app.utils.genetico.pasa_altas.metrics import calcular_metricas_fc, calcular_metricas_paso_aten
+from app.utils.genetico.pasa_bajas.metrics import calcular_metricas_fc, calcular_metricas_paso_aten
 
 
 # ---------------------------------------------------------------------------
@@ -48,8 +53,8 @@ def graficar_resultado(
     fig, ax = plt.subplots(figsize=(8, 5))
 
     if modo == "BASICO":
-        fc_real, amp_max, _, _ = calcular_metricas_fc(archivo_datos)
-        nivel_fc = (amp_max / np.sqrt(2)) if amp_max else None
+        fc_real, amp_dc, _, _, _ = calcular_metricas_fc(archivo_datos)
+        nivel_fc = (amp_dc / np.sqrt(2)) if amp_dc else None
 
         ax.semilogx(frecuencias, amplitudes, color="#2563eb", linewidth=2, label="Respuesta simulada")
         if nivel_fc is not None:
@@ -73,12 +78,12 @@ def graficar_resultado(
         if amp_aten_objetivo is not None:
             ax.axhline(amp_aten_objetivo, color="#dc2626", linestyle="--", linewidth=1,
                        label=f"Objetivo banda de atenuación ({amp_aten_objetivo:.2f} V)")
-        if f_aten is not None:
-            ax.axvline(f_aten, color="#dc2626", linestyle=":", linewidth=1.5,
-                       label=f"F_ATEN ({f_aten:.0f} Hz)")
         if f_paso is not None:
             ax.axvline(f_paso, color="#16a34a", linestyle=":", linewidth=1.5,
                        label=f"F_PASO ({f_paso:.0f} Hz)")
+        if f_aten is not None:
+            ax.axvline(f_aten, color="#dc2626", linestyle=":", linewidth=1.5,
+                       label=f"F_ATEN ({f_aten:.0f} Hz)")
 
         ax.set_ylabel("Amplitud (V)")
         ax.set_title("Respuesta en frecuencia del filtro optimizado (MODO AVANZADO)")
@@ -125,20 +130,15 @@ def guardar_resultado_json(
     ]
 
     if modo == "BASICO":
-        fc_real, _, _, _ = calcular_metricas_fc(archivo_datos)
+        fc_real, _, _, _, _ = calcular_metricas_fc(archivo_datos)
         if fc_real is None:
-            # Antes esto seguía directo a float(None), que lanza TypeError:
-            # una excepción que GeneticController.optimize NO captura (solo
-            # atrapa RuntimeError), así que terminaba como un 500 crudo sin
-            # mensaje útil. Con esto se convierte en el mismo RuntimeError
-            # con mensaje claro que ya se usa más abajo para la gráfica.
             raise RuntimeError(
                 "No se pudo calcular fc_real a partir de "
-                f"'{archivo_datos}'. Revisa calcular_metricas_fc()."
+                f"'{archivo_datos}'. Revisa calcular_metricas_fc() (pasa_bajas)."
             )
         frecuencias_obtenidas = [{"clave": "fc_obtenida", "valor": float(fc_real)}]
     else:
-        _, amp_paso, amp_aten, _, _ = calcular_metricas_paso_aten(
+        _, _, amp_paso, amp_aten, _, _ = calcular_metricas_paso_aten(
             archivo_datos, f_paso, f_aten
         )
         frecuencias_obtenidas = [
@@ -148,8 +148,6 @@ def guardar_resultado_json(
 
     grafica_b64 = _codificar_imagen_base64(archivo_grafica)
     if grafica_b64 is None:
-        # Falla explícita y clara, en vez de dejar que Pydantic
-        # reviente después con un mensaje confuso.
         raise RuntimeError(
             f"No se pudo generar/leer la gráfica en '{archivo_grafica}'. "
             "Revisa que graficar_resultado() la haya guardado correctamente."
