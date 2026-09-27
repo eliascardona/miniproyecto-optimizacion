@@ -7,7 +7,7 @@ from pathlib import Path
 # implique agregar una carpeta más, sin tocar esta clase.
 _DIRECTORIO_BASE = Path(__file__).resolve().parent
 
-NGSPICE_EXE = r"C:\SPICE_ELECTRONICS\Spice64\bin\ngspice.exe"
+NGSPICE_EXE = r"C:\SPICE_ELECTRONICS\Spice64\bin\ngspice.exe"  # cambiar según el usuario que ejecuta el programa
 
 
 class ConstantsRepository:
