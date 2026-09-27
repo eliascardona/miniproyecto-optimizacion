@@ -25,3 +25,10 @@ class PasaBandaRequest(BaseModel):
     filtro: Literal['pasa_banda']
     algoritmo: Literal['algoritmo_genetico']
     entorno: PasaBandaConfiguration
+
+# Mismo shape de configuración que el AG (ver la nota equivalente en
+# pasaaltas.py); solo cambia el Literal del algoritmo.
+class PasaBandaEnjambreRequest(BaseModel):
+    filtro: Literal['pasa_banda']
+    algoritmo: Literal['enjambre_particulas']
+    entorno: PasaBandaConfiguration
