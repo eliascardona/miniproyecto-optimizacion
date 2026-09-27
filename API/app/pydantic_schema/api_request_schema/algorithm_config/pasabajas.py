@@ -26,3 +26,10 @@ class PasaBajasRequest(BaseModel):
     filtro: Literal['pasa_bajas']
     algoritmo: Literal['algoritmo_genetico']
     entorno: PasaBajasConfiguration
+
+# Mismo shape de configuración que el AG (ver la nota equivalente en
+# pasaaltas.py); solo cambia el Literal del algoritmo.
+class PasaBajasEnjambreRequest(BaseModel):
+    filtro: Literal['pasa_bajas']
+    algoritmo: Literal['enjambre_particulas']
+    entorno: PasaBajasConfiguration
