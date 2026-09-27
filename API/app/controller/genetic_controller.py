@@ -13,6 +13,7 @@ from app.preparation_service.rechaza_banda_service import RechazaBandaPreparatio
 from app.preparation_service.pasa_altas_enjambre_service import PasaAltasEnjambrePreparationService
 from app.preparation_service.pasa_bajas_enjambre_service import PasaBajasEnjambrePreparationService
 from app.preparation_service.pasa_banda_enjambre_service import PasaBandaEnjambrePreparationService
+from app.preparation_service.rechaza_banda_enjambre_service import RechazaBandaEnjambrePreparationService
 from app.pydantic_schema.api_response_schema.circuit_response import CircuitoOptimizadoResponse
 from app.pydantic_schema.api_request_schema.circuit_optimization_request import CircuitOptimizationRequest
 
@@ -32,6 +33,7 @@ class GeneticController:
         ("pasa_altas", "enjambre_particulas"): PasaAltasEnjambrePreparationService,
         ("pasa_bajas", "enjambre_particulas"): PasaBajasEnjambrePreparationService,
         ("pasa_banda", "enjambre_particulas"): PasaBandaEnjambrePreparationService,
+        ("rechaza_banda", "enjambre_particulas"): RechazaBandaEnjambrePreparationService,
     }
 
     def optimize(self, request: CircuitOptimizationRequest) -> CircuitoOptimizadoResponse:

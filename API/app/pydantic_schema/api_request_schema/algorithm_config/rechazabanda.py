@@ -25,3 +25,10 @@ class RechazaBandaRequest(BaseModel):
     filtro: Literal['rechaza_banda']
     algoritmo: Literal['algoritmo_genetico']
     entorno: RechazaBandaConfiguration
+
+# Mismo shape de configuración que el AG (ver la nota equivalente en
+# pasaaltas.py); solo cambia el Literal del algoritmo.
+class RechazaBandaEnjambreRequest(BaseModel):
+    filtro: Literal['rechaza_banda']
+    algoritmo: Literal['enjambre_particulas']
+    entorno: RechazaBandaConfiguration
