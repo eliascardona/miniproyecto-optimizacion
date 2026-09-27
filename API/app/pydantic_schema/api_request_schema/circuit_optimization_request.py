@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field, model_validator
 from typing import Union, Any
 from enum import Enum
 from app.pydantic_schema.api_request_schema.algorithm_config.pasaaltas import PasaAltasRequest, PasaAltasEnjambreRequest
-from app.pydantic_schema.api_request_schema.algorithm_config.pasabajas import PasaBajasRequest
+from app.pydantic_schema.api_request_schema.algorithm_config.pasabajas import PasaBajasRequest, PasaBajasEnjambreRequest
 from app.pydantic_schema.api_request_schema.algorithm_config.pasabanda import PasaBandaRequest
 from app.pydantic_schema.api_request_schema.algorithm_config.rechazabanda import RechazaBandaRequest
 
@@ -24,6 +24,7 @@ FILTRO_ALGORITMO_MAP = {
     ("pasa_altas", "algoritmo_genetico"): PasaAltasRequest,
     ("pasa_altas", "enjambre_particulas"): PasaAltasEnjambreRequest,
     ("pasa_bajas", "algoritmo_genetico"): PasaBajasRequest,
+    ("pasa_bajas", "enjambre_particulas"): PasaBajasEnjambreRequest,
     ("pasa_banda", "algoritmo_genetico"): PasaBandaRequest,
     ("rechaza_banda", "algoritmo_genetico"): RechazaBandaRequest,
 }
