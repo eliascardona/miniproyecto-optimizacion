@@ -26,3 +26,14 @@ class PasaAltasRequest(BaseModel):
     filtro: Literal['pasa_altas']
     algoritmo: Literal['algoritmo_genetico']
     entorno: PasaAltasConfiguration
+
+# Mismo shape de configuración que el AG (entorno/barrido_ac/frecuencias
+# no cambian; solo difieren las claves dentro de parametros_optimizador,
+# y eso Pydantic no lo valida aquí -- parametros_optimizador es
+# list[Par] genérico en ambos casos). Por eso PasaAltasConfiguration se
+# reutiliza tal cual; solo hace falta esta variante de Request con el
+# Literal del algoritmo distinto.
+class PasaAltasEnjambreRequest(BaseModel):
+    filtro: Literal['pasa_altas']
+    algoritmo: Literal['enjambre_particulas']
+    entorno: PasaAltasConfiguration

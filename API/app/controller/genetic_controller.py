@@ -10,18 +10,24 @@ from app.preparation_service.pasa_altas_service import PasaAltasPreparationServi
 from app.preparation_service.pasa_bajas_service import PasaBajasPreparationService
 from app.preparation_service.pasa_banda_service import PasaBandaPreparationService
 from app.preparation_service.rechaza_banda_service import RechazaBandaPreparationService
+from app.preparation_service.pasa_altas_enjambre_service import PasaAltasEnjambrePreparationService
 from app.pydantic_schema.api_response_schema.circuit_response import CircuitoOptimizadoResponse
 from app.pydantic_schema.api_request_schema.circuit_optimization_request import CircuitOptimizationRequest
 
 
 class GeneticController:
 
-    # Doble switch como diccionario de servicios
+    # Doble switch como diccionario de servicios. El nombre de la clase
+    # quedó de cuando solo existía el AG; ahora también enruta PSO
+    # (enjambre_particulas). No la renombré en este cambio para no tocar
+    # unique_entrypoint.py de más -- si quieres, en un próximo paso la
+    # renombro a algo como OptimizationController.
     SERVICE_MAP = {
         ("pasa_altas", "algoritmo_genetico"): PasaAltasPreparationService,
         ("pasa_bajas", "algoritmo_genetico"): PasaBajasPreparationService,
         ("pasa_banda", "algoritmo_genetico"): PasaBandaPreparationService,
         ("rechaza_banda", "algoritmo_genetico"): RechazaBandaPreparationService,
+        ("pasa_altas", "enjambre_particulas"): PasaAltasEnjambrePreparationService,
     }
 
     def optimize(self, request: CircuitOptimizationRequest) -> CircuitoOptimizadoResponse:

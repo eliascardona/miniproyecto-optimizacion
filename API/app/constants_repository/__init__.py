@@ -13,12 +13,9 @@ NGSPICE_EXE = r"C:\SPICE_ELECTRONICS\Spice64\bin\ngspice.exe"
 class ConstantsRepository:
 
     def __init__(self, filtro: str):
-        """
-        `filtro` debe coincidir con el nombre de una subcarpeta real bajo
-        constants_repository/ (hoy: "pasa_altas", "pasa_bajas"), que debe
-        contener su propio filtro.cir y lm741.lib.
-        """
+
         directorio_filtro = _DIRECTORIO_BASE / filtro
+
         if not directorio_filtro.is_dir():
             raise ValueError(
                 f"No existe la carpeta de recursos para el filtro '{filtro}' "
