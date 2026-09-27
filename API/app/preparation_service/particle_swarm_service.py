@@ -136,7 +136,27 @@ class ParticleSwarmPreparationService:
 
     @staticmethod
     def _buscar(lista: list[dict], clave: str):
-        return next((p["valor"] for p in lista if p["clave"] == clave), None)
+        """Busca un {clave, valor} por su 'clave' dentro de una lista (sirve
+        tanto para parametros_optimizador como para frecuencias).
+
+        Antes devolvía None en silencio si la clave no estaba, y quien
+        llamaba hacía int(None)/float(None), que revienta con un
+        TypeError críptico varios niveles más abajo (sin decir CUÁL
+        clave faltaba). Ahora falla aquí mismo, con un mensaje claro que
+        GeneticController convierte en un 422 útil en vez de un 500 con
+        traceback -- típicamente indica que el request trae las claves
+        de otro filtro o de otro algoritmo (parametros_optimizador y
+        frecuencias no son intercambiables entre combinaciones).
+        """
+        for p in lista:
+            if p.get("clave") == clave:
+                return p["valor"]
+        claves_recibidas = [p.get("clave") for p in lista]
+        raise ValueError(
+            f"Falta el parámetro requerido '{clave}'. "
+            f"Claves recibidas: {claves_recibidas}. "
+            "¿El request trae las claves de otro filtro o de otro algoritmo?"
+        )
 
     def _extraer_frecuencias(self, modo: str, frecuencias: list[dict], vs_valor: float) -> dict:
         """

@@ -1,18 +1,28 @@
 """
-Preparación genérica del algoritmo genético para CUALQUIER filtro.
+Preparación genérica de Optimización Bayesiana (BO) para CUALQUIER filtro.
 
-Responsabilidades (lo que antes vivía todo junto en PasaAltasPreparationService):
-  - Validar la configuración recibida del controlador.
-  - Extraer los componentes del archivo .cir correspondiente al filtro.
-  - Construir el contexto de ejecución (ctx) a partir de esa configuración.
-  - Orquestar la corrida: arma el ctx, delega el BUCLE del AG al motor
-    genérico (utils.genetico.genetic_algorithm_runner), y llama a los
-    "hooks" específicos del filtro para fitness/gráfica/JSON de salida.
+Estructuralmente es el equivalente de GeneticPreparationService/
+ParticleSwarmPreparationService, pero para BO: valida la configuración,
+extrae los componentes del .cir, arma el contexto de ejecución, y
+orquesta la corrida delegando el ciclo de BO al motor genérico
+(utils.optimizacion_bayesiana.bayesian_runner) y llamando a los mismos
+"hooks" de fitness/gráfica/JSON que ya usan los servicios de AG/PSO para
+ese mismo filtro (fitness y métricas son propiedad del FILTRO, no del
+algoritmo de búsqueda).
 
-Lo que este archivo NO sabe: qué significa un buen filtro pasa-altas vs
-pasa-bajas, cómo se calculan sus métricas, ni cómo se arma su gráfica o su
-JSON de resultado — eso es exclusivo de cada subclase concreta
-(PasaAltasPreparationService, PasaBajasPreparationService, ...), que debe
+Es una clase INDEPENDIENTE de las otras dos bases (no hereda de ellas ni
+comparte código), por la misma razón de siempre: no arriesgar AG/PSO ya
+verificados. Duplica una porción moderada de código a cambio de eso.
+
+Particularidad de esta base frente a las otras dos: run_optimization
+mide el tiempo total de la corrida y lo agrega al dict de resultado como
+"tiempo_ejecucion_s" -- GeneticController usa la presencia de esa clave
+para decidir si construir CircuitoOptimizadoResponse o
+CircuitoOptimizadoConTiempoResponse, así que los hooks
+_guardar_resultado_json en sí NO necesitan saber nada de esto (se
+reutilizan sin cambios los mismos de AG/PSO para el filtro).
+
+Cada filtro concreto (p.ej. PasaAltasBayesianaPreparationService) debe
 fijar estos 6 atributos de clase (los "hooks"):
 
     config_schema           (type)      -> el schema Pydantic de PasaXConfiguration
@@ -21,11 +31,8 @@ fijar estos 6 atributos de clase (los "hooks"):
     _fitness_paso_aten      (staticmethod) -> fitness del modo AVANZADO
     _graficar_resultado     (staticmethod) -> genera y guarda la gráfica PNG
     _guardar_resultado_json (staticmethod) -> arma el dict de resultado final
-
-`_log_encabezado`/`_log_generacion` son opcionales de sobreescribir (traen
-un valor genérico por defecto); no afectan la respuesta de la API, solo el
-detalle que se imprime en consola mientras corre el AG.
 """
+import time
 from pathlib import Path
 import re
 
@@ -33,13 +40,13 @@ from fastapi import HTTPException
 
 from app.pydantic_schema.global_validator import safe_parse
 from app.constants_repository import ConstantsRepository
-from app.utils.genetico.genetic_algorithm_runner import ejecutar_algoritmo_genetico
+from app.utils.optimizacion_bayesiana.bayesiana_runner import ejecutar_bo
 from app.utils.genetico.commercial_series import SERIE_E6, SERIE_E12
 from app.utils.spice_runner import actualizar_circuito, ejecutar_spice
 from app.utils.spice_formatter import valor_spice
 
 
-class GeneticPreparationService:
+class BayesianPreparationService:
 
     # --- Deben fijarse en cada subclase concreta ---
     config_schema: type = None
@@ -53,7 +60,7 @@ class GeneticPreparationService:
         self.constants_repository = ConstantsRepository(self.filtro_nombre)
 
     # ------------------------------------------------------------------
-    # Validación (genérico: usa el schema que fije la subclase)
+    # Validación (idéntica a GeneticPreparationService/ParticleSwarmPreparationService)
     # ------------------------------------------------------------------
 
     def validate_json_config(self, request_data: dict) -> dict:
@@ -63,9 +70,7 @@ class GeneticPreparationService:
         return parsed.model_dump()
 
     # ------------------------------------------------------------------
-    # Extracción de componentes del .cir (genérico: mismo formato de
-    # netlist para todos los filtros — solo cambia la topología interna,
-    # no la convención de nombres Rn_m / Cn_m)
+    # Extracción de componentes del .cir (idéntica a las otras dos bases)
     # ------------------------------------------------------------------
 
     def extract_components(self) -> list[dict]:
@@ -88,13 +93,15 @@ class GeneticPreparationService:
                         "nombre": nombre,
                         "tipo": tipo,
                         "nodos": nodos,
-                        "es_shunt": "0" in nodos,  # derivado de la topología real, no del nombre
+                        "es_shunt": "0" in nodos,
                     })
         return detectados
 
     # ------------------------------------------------------------------
-    # Construcción del contexto de ejecución (genérico: mismo shape de
-    # JSON para todos los filtros)
+    # Construcción del contexto de ejecución. Igual que en las otras dos
+    # bases para entorno/barrido/frecuencias; la única diferencia real es
+    # qué hiperparámetros de parametros_optimizador se leen (BO:
+    # n_iniciales, n_iteraciones, xi, n_candidatos, n_restarts, semilla).
     # ------------------------------------------------------------------
 
     def _build_run_context(self, cfg: dict) -> dict:
@@ -117,21 +124,15 @@ class GeneticPreparationService:
             "rl_valor": float(entorno["r_carga"]),
             "f_inicial": float(barrido["f_inicial"]),
             "f_final": float(barrido["f_final"]),
-            # AG
-            "tam_poblacion": int(self._buscar(params, "tam_poblacion")),
-            "num_generaciones": int(self._buscar(params, "num_generaciones")),
-            "prob_cruce": float(self._buscar(params, "prob_cruce")),
-            "prob_mutacion": float(self._buscar(params, "prob_mutacion")),
-            "elitismo": int(self._buscar(params, "elitismo")),
-            "torneo_k": int(self._buscar(params, "torneo_k")),
+            # BO
+            "n_iniciales": int(self._buscar(params, "n_iniciales")),
+            "n_iteraciones": int(self._buscar(params, "n_iteraciones")),
+            "xi": float(self._buscar(params, "xi")),
+            "n_candidatos": int(self._buscar(params, "n_candidatos")),
+            "n_restarts": int(self._buscar(params, "n_restarts")),
+            "semilla": int(self._buscar(params, "semilla")),
         }
 
-        # Las frecuencias objetivo SÍ dependen de cada filtro (pasa_altas/
-        # pasa_bajas necesitan 1-2; pasa_banda necesita hasta 4, con otros
-        # nombres de clave). Se guardan en su propio dict, no sueltas en
-        # ctx, para que _evaluar()/run_optimization() sepan exactamente
-        # qué reenviar a los hooks del filtro sin tener que adivinar por
-        # exclusión qué claves son "de frecuencias" y cuáles no.
         ctx["frecuencias_ctx"] = self._extraer_frecuencias(modo, frecuencias, vs_valor)
 
         return ctx
@@ -162,14 +163,10 @@ class GeneticPreparationService:
 
     def _extraer_frecuencias(self, modo: str, frecuencias: list[dict], vs_valor: float) -> dict:
         """
-        Traduce la lista `frecuencias` del JSON a las claves que
-        fitness_fc/fitness_paso_aten y graficar_resultado/
-        guardar_resultado_json del filtro concreto esperan recibir.
-
-        Este default asume el shape que ya usan pasa_altas y pasa_bajas
-        (1 frecuencia objetivo en BASICO; f_paso/f_aten en AVANZADO).
-        Un filtro con un shape distinto (p.ej. pasa_banda, que necesita
-        2 y 4 frecuencias respectivamente) debe sobreescribir este método.
+        Mismo default que las otras dos bases (1 frecuencia objetivo en
+        BASICO; f_paso/f_aten en AVANZADO). Un filtro con un shape
+        distinto (pasa_banda, rechaza_banda) debe sobreescribir este
+        método -- igual que ya hacen sus contrapartes de AG/PSO.
         """
         if modo == "BASICO":
             return {"fc_objetivo": float(self._buscar(frecuencias, "fc_objetivo"))}
@@ -182,7 +179,8 @@ class GeneticPreparationService:
             }
 
     # ------------------------------------------------------------------
-    # Fitness unificado (genérico: dispatcha a los hooks de la subclase)
+    # Fitness unificado (idéntico a las otras dos bases: no depende de
+    # qué algoritmo de búsqueda esté llamando)
     # ------------------------------------------------------------------
 
     def _evaluar(self, individuo: list[int], ctx: dict, componentes_ag: list[dict]) -> tuple:
@@ -208,7 +206,7 @@ class GeneticPreparationService:
             return self._fitness_paso_aten(**shared, **ctx["frecuencias_ctx"])
 
     # --- Hooks de fitness/exportación: cada subclase los reemplaza con
-    # staticmethod(...) apuntando a sus propias utils.genetico.<filtro>.* ---
+    # staticmethod(...) apuntando a utils.genetico.<filtro>.* ---
 
     def _fitness_fc(self, **kwargs) -> tuple:
         raise NotImplementedError(f"{type(self).__name__} no definió '_fitness_fc'.")
@@ -223,41 +221,38 @@ class GeneticPreparationService:
         raise NotImplementedError(f"{type(self).__name__} no definió '_guardar_resultado_json'.")
 
     # ------------------------------------------------------------------
-    # Logging por consola (genérico por defecto; las subclases pueden dar
-    # más detalle sobreescribiendo estos dos métodos — no afecta la
-    # respuesta de la API, solo lo que se ve en consola)
+    # Logging por consola (genérico por defecto; igual que las otras dos
+    # bases, no afecta la respuesta de la API)
     # ------------------------------------------------------------------
 
     def _log_encabezado(self, ctx: dict, componentes_ag: list[dict]) -> None:
         print(
-            f"Filtro={self.filtro_nombre} | Modo={ctx['modo']} | V_fuente={ctx['vs_valor']} V | "
+            f"Filtro={self.filtro_nombre} | Algoritmo=optimizacion_bayesiana | "
+            f"Modo={ctx['modo']} | V_fuente={ctx['vs_valor']} V | "
             f"Rs={ctx['rs_valor']} Ω | Rl={ctx['rl_valor']} Ω"
         )
         print(
-            f"AG: población={ctx['tam_poblacion']} | generaciones={ctx['num_generaciones']} | "
-            f"elitismo={ctx['elitismo']} | torneo_k={ctx['torneo_k']} | "
-            f"prob_cruce={ctx['prob_cruce']} | prob_mutacion={ctx['prob_mutacion']}"
+            f"BO: puntos_iniciales={ctx['n_iniciales']} | iteraciones={ctx['n_iteraciones']} | "
+            f"xi={ctx['xi']} | n_candidatos={ctx['n_candidatos']} | n_restarts={ctx['n_restarts']}"
         )
         print("-" * 80)
 
     def _log_generacion(self, gen: int, fit: float, res: tuple, modo: str) -> None:
-        print(f"Gen {gen + 1:<4} | fitness={fit:.4f}")
+        print(f"Iter {gen + 1:<4} | fitness={fit:.4f}")
 
     # ------------------------------------------------------------------
-    # Orquestación (genérico: arma ctx, corre el AG genérico, simula el
-    # mejor individuo, exporta gráfica + JSON con los hooks del filtro)
+    # Orquestación: arma ctx, corre la BO genérica (cronometrada), simula
+    # el mejor individuo, exporta gráfica + JSON con los hooks del
+    # filtro, y agrega tiempo_ejecucion_s al resultado.
     # ------------------------------------------------------------------
 
     def run_optimization(self, cfg: dict, componentes_ag: list[dict]) -> dict:
-        """
-        Ejecuta el algoritmo genético completo con la configuración dada.
-        Devuelve el diccionario de resultado generado por el hook
-        _guardar_resultado_json del filtro concreto.
-        """
         ctx = self._build_run_context(cfg)
         repo = self.constants_repository
 
-        mejor_global, mejor_fit = ejecutar_algoritmo_genetico(
+        inicio = time.time()
+
+        mejor_global, mejor_fit = ejecutar_bo(
             componentes_ag,
             ctx,
             evaluar_individuo=lambda individuo: self._evaluar(individuo, ctx, componentes_ag),
@@ -273,15 +268,17 @@ class GeneticPreparationService:
         )
         ejecutar_spice(repo.get_ngspice_exe(), repo.get_archivo_cir())
 
+        tiempo_total = time.time() - inicio
+
         print("\n" + "=" * 50)
-        print("OPTIMIZACIÓN FINALIZADA")
+        print("OPTIMIZACIÓN FINALIZADA (BO)")
+        print(f"Tiempo total: {tiempo_total:.3f} s")
         print("Componentes Optimizados:")
         for i, comp in enumerate(componentes_ag):
             lista = SERIE_E12 if comp["tipo"] == "R" else SERIE_E6
             print(f"  {comp['nombre']}: {valor_spice(lista[mejor_global[i]])}")
         print("=" * 50)
 
-        # Exportar gráfica (hook del filtro)
         self._graficar_resultado(
             archivo_datos=repo.get_archivo_datos(),
             archivo_salida=repo.get_grafica_archivo(),
@@ -290,8 +287,7 @@ class GeneticPreparationService:
             **ctx["frecuencias_ctx"],
         )
 
-        # Exportar JSON y devolver resultado (hook del filtro)
-        return self._guardar_resultado_json(
+        resultado = self._guardar_resultado_json(
             mejor_global=mejor_global,
             mejor_fit=mejor_fit,
             componentes_ag=componentes_ag,
@@ -300,3 +296,5 @@ class GeneticPreparationService:
             archivo_grafica=repo.get_grafica_archivo(),
             **ctx["frecuencias_ctx"],
         )
+        resultado["tiempo_ejecucion_s"] = tiempo_total
+        return resultado

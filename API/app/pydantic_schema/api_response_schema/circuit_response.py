@@ -27,3 +27,18 @@ class CircuitoOptimizadoResponse(BaseModel):
     grafica_png_base64: str = Field(
         ..., description="Imagen de la gráfica en formato PNG codificada en Base64"
     )
+
+
+class CircuitoOptimizadoConTiempoResponse(CircuitoOptimizadoResponse):
+    """
+    Igual que CircuitoOptimizadoResponse, con un campo adicional para
+    algoritmos que reportan cuánto tardó la optimización (p.ej.
+    optimización bayesiana, donde cada iteración ajusta un proceso
+    gaussiano + una optimización L-BFGS-B, mucho más costosa que una
+    generación de AG o una iteración de PSO). GeneticController decide
+    cuál de las dos clases construir según si el resultado trae o no
+    'tiempo_ejecucion_s'.
+    """
+    tiempo_ejecucion_s: float = Field(
+        ..., description="Tiempo total de la optimización, en segundos"
+    )
