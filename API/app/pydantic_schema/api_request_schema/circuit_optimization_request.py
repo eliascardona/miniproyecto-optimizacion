@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field, model_validator
 from typing import Union, Any
 from enum import Enum
-from app.pydantic_schema.api_request_schema.algorithm_config.pasaaltas import PasaAltasRequest, PasaAltasEnjambreRequest, PasaAltasBayesianaRequest
+from app.pydantic_schema.api_request_schema.algorithm_config.pasaaltas import PasaAltasRequest, PasaAltasEnjambreRequest, PasaAltasBayesianaRequest, PasaAltasRecocidoRequest
 from app.pydantic_schema.api_request_schema.algorithm_config.pasabajas import PasaBajasRequest, PasaBajasEnjambreRequest, PasaBajasBayesianaRequest
 from app.pydantic_schema.api_request_schema.algorithm_config.pasabanda import PasaBandaRequest, PasaBandaEnjambreRequest, PasaBandaBayesianaRequest
 from app.pydantic_schema.api_request_schema.algorithm_config.rechazabanda import RechazaBandaRequest, RechazaBandaEnjambreRequest, RechazaBandaBayesianaRequest
@@ -16,6 +16,12 @@ class FiltroEnum(str, Enum):
 
 class AlgoritmoEnum(str, Enum):
     algoritmo_genetico = "algoritmo_genetico"
+    # Antes decía bayesiana = "bayesiana", que no coincidía con el valor
+    # real que usa la API ("optimizacion_bayesiana", confirmado con el
+    # config.json y el nombre de algoritmo que llega en el request).
+    # Este enum es solo de referencia (no participa en la validación
+    # real, que corre por FILTRO_ALGORITMO_MAP), pero vale la pena que
+    # no mienta.
     optimizacion_bayesiana = "optimizacion_bayesiana"
     enjambre_particulas = "enjambre_particulas"
     recocido_simulado = "recocido_simulado"
@@ -24,6 +30,7 @@ FILTRO_ALGORITMO_MAP = {
     ("pasa_altas", "algoritmo_genetico"): PasaAltasRequest,
     ("pasa_altas", "enjambre_particulas"): PasaAltasEnjambreRequest,
     ("pasa_altas", "optimizacion_bayesiana"): PasaAltasBayesianaRequest,
+    ("pasa_altas", "recocido_simulado"): PasaAltasRecocidoRequest,
     ("pasa_bajas", "algoritmo_genetico"): PasaBajasRequest,
     ("pasa_bajas", "enjambre_particulas"): PasaBajasEnjambreRequest,
     ("pasa_bajas", "optimizacion_bayesiana"): PasaBajasBayesianaRequest,
