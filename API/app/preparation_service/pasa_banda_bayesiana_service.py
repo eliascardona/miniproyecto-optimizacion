@@ -1,27 +1,26 @@
 """
-Conecta ParticleSwarmPreparationService con las piezas específicas del
-filtro pasa-banda.
+Conecta BayesianPreparationService con las piezas específicas del filtro
+pasa-banda.
 
-A diferencia de pasa_bajas (donde fitness_fc SÍ tenía pesos distintos
-entre AG y PSO), aquí comparé línea por línea el fitness, las métricas
+Comparé línea por línea el fitness (pesos 0.25/0.25/0.125/0.125/0.25 y
+0.25/0.25/0.15/0.15/0.1/0.1, misma compuerta dura de rebote:
+REBOTE_TOLERADO_REL=0.03, PENALIZACION_ATEN_FALLO=0.1) y las métricas
 (_cruce_interpolado, _peor_rebote, calcular_metricas_fc,
-calcular_metricas_paso_aten) y el exportador de resultado contra el
-código fuente de PSO: son IDÉNTICOS a los de utils.genetico.pasa_banda
-(mismos pesos, misma compuerta dura de rebote, mismas tuplas de retorno)
--- así que, igual que con pasa_altas, todo se reutiliza tal cual.
+calcular_metricas_paso_aten) contra el código fuente de BO: son
+IDÉNTICOS a los de utils.genetico.pasa_banda -- igual que pasó con
+PasaAltasBayesianaPreparationService, todo se reutiliza tal cual.
 
 Único punto genuino de este servicio: sobreescribir _extraer_frecuencias,
-porque pasa_banda necesita 2 frecuencias en BASICO y 4 en AVANZADO (igual
-que su contraparte de AG) en vez del default de 1/2 de
-ParticleSwarmPreparationService.
+porque pasa_banda necesita 2 frecuencias en BASICO y 4 en AVANZADO
+(mismo patrón que sus contrapartes de AG y PSO para este filtro).
 """
 from app.pydantic_schema.api_request_schema.algorithm_config.pasabanda import PasaBandaConfiguration
-from app.preparation_service.particle_swarm_service import ParticleSwarmPreparationService
+from app.preparation_service.bayesian_preparation_service import BayesianPreparationService
 from app.utils.genetico.pasa_banda.fitness import fitness_fc, fitness_paso_aten
 from app.utils.genetico.pasa_banda.result_exporter import graficar_resultado, guardar_resultado_json
 
 
-class PasaBandaEnjambrePreparationService(ParticleSwarmPreparationService):
+class PasaBandaBayesianaPreparationService(BayesianPreparationService):
     config_schema = PasaBandaConfiguration
     filtro_nombre = "pasa_banda"
 
@@ -31,9 +30,8 @@ class PasaBandaEnjambrePreparationService(ParticleSwarmPreparationService):
     _guardar_resultado_json = staticmethod(guardar_resultado_json)
 
     # ------------------------------------------------------------------
-    # Mismo override que PasaBandaPreparationService (AG): dos bordes,
-    # no uno, así que necesita sus propias claves de frecuencias en vez
-    # del default de ParticleSwarmPreparationService.
+    # Mismo override que PasaBandaPreparationService (AG) y
+    # PasaBandaEnjambrePreparationService (PSO): dos bordes, no uno.
     # ------------------------------------------------------------------
 
     def _extraer_frecuencias(self, modo: str, frecuencias: list[dict], vs_valor: float) -> dict:
@@ -54,19 +52,19 @@ class PasaBandaEnjambrePreparationService(ParticleSwarmPreparationService):
 
     # ------------------------------------------------------------------
     # Logging por consola con más detalle que el genérico (opcional).
-    # Mismas columnas que PasaBandaPreparationService (AG): fitness_fc/
-    # fitness_paso_aten son las mismas funciones, misma forma de tupla.
+    # Mismas columnas que PasaBandaPreparationService (AG): mismas
+    # funciones de fitness, misma forma de tupla (12 y 15 elementos).
     # ------------------------------------------------------------------
 
     def _log_encabezado(self, ctx: dict, componentes_ag: list[dict]) -> None:
         modo = ctx["modo"]
         print(
-            f"Modo={modo} | Algoritmo=enjambre_particulas | V_fuente={ctx['vs_valor']} V | "
+            f"Modo={modo} | Algoritmo=optimizacion_bayesiana | V_fuente={ctx['vs_valor']} V | "
             f"Rs={ctx['rs_valor']} Ω | Rl={ctx['rl_valor']} Ω"
         )
         print(
-            f"PSO: partículas={ctx['num_particulas']} | iteraciones={ctx['num_iteraciones']} | "
-            f"w={ctx['w']} | c1={ctx['c1']} | c2={ctx['c2']}"
+            f"BO: puntos_iniciales={ctx['n_iniciales']} | iteraciones={ctx['n_iteraciones']} | "
+            f"xi={ctx['xi']} | n_candidatos={ctx['n_candidatos']} | n_restarts={ctx['n_restarts']}"
         )
         fc = ctx["frecuencias_ctx"]
         if modo == "BASICO":
@@ -76,7 +74,7 @@ class PasaBandaEnjambrePreparationService(ParticleSwarmPreparationService):
                 f"Pendiente objetivo=40.0 dB/dec (cada borde)\n"
             )
             print(
-                f"{'Iter':<6} | {'Fit':<6} | {'AmpMax (V)':<10} | {'FcInf (Hz)':<11} | {'FcSup (Hz)':<11} | "
+                f"{'Gen':<6} | {'Fit':<6} | {'AmpMax (V)':<10} | {'FcInf (Hz)':<11} | {'FcSup (Hz)':<11} | "
                 f"{'PendSub':<8} | {'PendBaj':<8} | {'f_amp':<7} | {'f_fcInf':<8} | {'f_fcSup':<8} | "
                 f"{'f_pSub':<7} | {'f_pBaj':<7} | {'pen_reb':<7}"
             )
@@ -87,7 +85,7 @@ class PasaBandaEnjambrePreparationService(ParticleSwarmPreparationService):
                 f"Pendiente objetivo=40.0 dB/dec (cada borde)\n"
             )
             print(
-                f"{'Iter':<6} | {'Fit':<6} | {'AmpAten1 (V)':<12} | {'AmpPaso1 (V)':<12} | "
+                f"{'Gen':<6} | {'Fit':<6} | {'AmpAten1 (V)':<12} | {'AmpPaso1 (V)':<12} | "
                 f"{'AmpPaso2 (V)':<12} | {'AmpAten2 (V)':<12} | {'PendSub':<8} | {'PendBaj':<8} | "
                 f"{'f_paso1':<7} | {'f_paso2':<7} | {'f_aten1':<7} | {'f_aten2':<7} | "
                 f"{'f_pSub':<7} | {'f_pBaj':<7} | {'pen_aten':<8}"
