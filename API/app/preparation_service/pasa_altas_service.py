@@ -38,9 +38,10 @@ class PasaAltasPreparationService(GeneticPreparationService):
             f"elitismo={ctx['elitismo']} | torneo_k={ctx['torneo_k']} | "
             f"prob_cruce={ctx['prob_cruce']} | prob_mutacion={ctx['prob_mutacion']}"
         )
+        fc = ctx["frecuencias_ctx"]
         if modo == "BASICO":
             print(
-                f"Fc objetivo={ctx['fc_objetivo']} Hz | "
+                f"Fc objetivo={fc['fc_objetivo']} Hz | "
                 f"Pendiente objetivo=80.0 dB/dec\n"
             )
             print(
@@ -50,7 +51,7 @@ class PasaAltasPreparationService(GeneticPreparationService):
             )
         else:
             print(
-                f"F_ATEN={ctx['f_aten']} Hz | F_PASO={ctx['f_paso']} Hz | "
+                f"F_ATEN={fc['f_aten']} Hz | F_PASO={fc['f_paso']} Hz | "
                 f"Pendiente objetivo=80.0 dB/dec\n"
             )
             print(
