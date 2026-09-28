@@ -33,3 +33,10 @@ class PasaBajasEnjambreRequest(BaseModel):
     filtro: Literal['pasa_bajas']
     algoritmo: Literal['enjambre_particulas']
     entorno: PasaBajasConfiguration
+
+# Mismo shape de configuración que el AG/PSO; solo cambia el Literal
+# del algoritmo.
+class PasaBajasBayesianaRequest(BaseModel):
+    filtro: Literal['pasa_bajas']
+    algoritmo: Literal['optimizacion_bayesiana']
+    entorno: PasaBajasConfiguration

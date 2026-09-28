@@ -8,14 +8,14 @@ XOP1 1 2 Vp Vn 2 LM741
 
 * --- 2. RED TWIN-T PASIVA ---
 * Red superior R-R-C
-R1 2 3 1.0e+2
-R2 3 5 6.8e+3
-C3 3 0 3.3e-8
+R1 2 3 2.7e+5
+R2 3 5 1.0e+7
+C3 3 0 6.8e-4
 
 * Red inferior C-C-R
-C1 2 4 6.8e-7
-C2 4 5 4.7e-8
-R3 4 0 3.3e+5
+C1 2 4 2.2e-5
+C2 4 5 1.5e-8
+R3 4 0 8.2e+4
 
 * --- 3. BUFFER DE SALIDA (Aísla Rl) ---
 * Toma la señal pasiva del nodo 5 y la entrega limpia a la carga
