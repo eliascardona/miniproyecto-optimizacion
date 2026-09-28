@@ -32,3 +32,10 @@ class RechazaBandaEnjambreRequest(BaseModel):
     filtro: Literal['rechaza_banda']
     algoritmo: Literal['enjambre_particulas']
     entorno: RechazaBandaConfiguration
+
+# Mismo shape de configuración que el AG/PSO; solo cambia el Literal
+# del algoritmo.
+class RechazaBandaBayesianaRequest(BaseModel):
+    filtro: Literal['rechaza_banda']
+    algoritmo: Literal['optimizacion_bayesiana']
+    entorno: RechazaBandaConfiguration

@@ -4,7 +4,7 @@ from enum import Enum
 from app.pydantic_schema.api_request_schema.algorithm_config.pasaaltas import PasaAltasRequest, PasaAltasEnjambreRequest, PasaAltasBayesianaRequest
 from app.pydantic_schema.api_request_schema.algorithm_config.pasabajas import PasaBajasRequest, PasaBajasEnjambreRequest, PasaBajasBayesianaRequest
 from app.pydantic_schema.api_request_schema.algorithm_config.pasabanda import PasaBandaRequest, PasaBandaEnjambreRequest, PasaBandaBayesianaRequest
-from app.pydantic_schema.api_request_schema.algorithm_config.rechazabanda import RechazaBandaRequest, RechazaBandaEnjambreRequest
+from app.pydantic_schema.api_request_schema.algorithm_config.rechazabanda import RechazaBandaRequest, RechazaBandaEnjambreRequest, RechazaBandaBayesianaRequest
 
 
 # Only enums for the reference
@@ -32,6 +32,7 @@ FILTRO_ALGORITMO_MAP = {
     ("pasa_banda", "optimizacion_bayesiana"): PasaBandaBayesianaRequest,
     ("rechaza_banda", "algoritmo_genetico"): RechazaBandaRequest,
     ("rechaza_banda", "enjambre_particulas"): RechazaBandaEnjambreRequest,
+    ("rechaza_banda", "optimizacion_bayesiana"): RechazaBandaBayesianaRequest,
 }
 
 class CircuitOptimizationRequest(BaseModel):
