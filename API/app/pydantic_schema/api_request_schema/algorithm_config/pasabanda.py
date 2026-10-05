@@ -39,3 +39,10 @@ class PasaBandaBayesianaRequest(BaseModel):
     filtro: Literal['pasa_banda']
     algoritmo: Literal['optimizacion_bayesiana']
     entorno: PasaBandaConfiguration
+
+# Mismo shape de configuración que el AG/PSO/BO; solo cambia el Literal
+# del algoritmo.
+class PasaBandaRecocidoRequest(BaseModel):
+    filtro: Literal['pasa_banda']
+    algoritmo: Literal['recocido_simulado']
+    entorno: PasaBandaConfiguration
