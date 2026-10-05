@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from app.routes.unique_entrypoint import unique_entrypoint
+from API.app.routes.individual_optimization_router import individual_optimization_router
 
 
 def create_app() -> FastAPI:
@@ -10,7 +10,7 @@ def create_app() -> FastAPI:
         version="1.0.0",
     )
 
-    app.include_router(unique_entrypoint)
+    app.include_router(individual_optimization_router)
 
     return app
 
