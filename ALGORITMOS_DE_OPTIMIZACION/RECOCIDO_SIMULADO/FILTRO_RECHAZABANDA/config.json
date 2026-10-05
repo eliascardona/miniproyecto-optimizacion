@@ -1,0 +1,49 @@
+{
+    "modo": "AVANZADO",
+    "entorno": {
+        "v_fuente": 6.0,
+        "r_fuente": 680.0,
+        "r_carga": 680.0
+    },
+    "barrido_ac": {
+        "f_inicial": 1.0,
+        "f_final": 1000000.0,
+        "puntos_por_decada": 10
+    },
+    "frecuencias": [
+        {
+            "clave": "f_paso_1",
+            "valor": 100.0
+        },
+        {
+            "clave": "f_aten_1",
+            "valor": 200.0
+        },
+        {
+            "clave": "f_aten_2",
+            "valor": 500.0
+        },
+        {
+            "clave": "f_paso_2",
+            "valor": 5000.0
+        }
+    ],
+    "parametros_optimizador": [
+        {
+            "clave": "temp_inicial",
+            "valor": 100.0
+        },
+        {
+            "clave": "temp_final",
+            "valor": 0.01
+        },
+        {
+            "clave": "factor_enfriamiento",
+            "valor": 0.794
+        },
+        {
+            "clave": "iteraciones_por_temp",
+            "valor": 30
+        }
+    ]
+}
