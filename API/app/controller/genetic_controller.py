@@ -16,6 +16,7 @@ from app.preparation_service.pasa_banda_enjambre_service import PasaBandaEnjambr
 from app.preparation_service.rechaza_banda_enjambre_service import RechazaBandaEnjambrePreparationService
 from app.preparation_service.pasa_altas_bayesiana_service import PasaAltasBayesianaPreparationService
 from app.preparation_service.pasa_altas_recocido_service import PasaAltasRecocidoPreparationService
+from app.preparation_service.pasa_bajas_recocido_service import PasaBajasRecocidoPreparationService
 from app.preparation_service.pasa_bajas_bayesiana_service import PasaBajasBayesianaPreparationService
 from app.preparation_service.pasa_banda_bayesiana_service import PasaBandaBayesianaPreparationService
 from app.preparation_service.rechaza_banda_bayesiana_service import RechazaBandaBayesianaPreparationService
@@ -44,6 +45,7 @@ class GeneticController:
         ("rechaza_banda", "enjambre_particulas"): RechazaBandaEnjambrePreparationService,
         ("pasa_altas", "optimizacion_bayesiana"): PasaAltasBayesianaPreparationService,
         ("pasa_altas", "recocido_simulado"): PasaAltasRecocidoPreparationService,
+        ("pasa_bajas", "recocido_simulado"): PasaBajasRecocidoPreparationService,
         ("pasa_bajas", "optimizacion_bayesiana"): PasaBajasBayesianaPreparationService,
         ("pasa_banda", "optimizacion_bayesiana"): PasaBandaBayesianaPreparationService,
         ("rechaza_banda", "optimizacion_bayesiana"): RechazaBandaBayesianaPreparationService,
