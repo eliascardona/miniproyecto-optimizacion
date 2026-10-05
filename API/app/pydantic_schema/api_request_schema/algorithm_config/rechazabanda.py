@@ -39,3 +39,10 @@ class RechazaBandaBayesianaRequest(BaseModel):
     filtro: Literal['rechaza_banda']
     algoritmo: Literal['optimizacion_bayesiana']
     entorno: RechazaBandaConfiguration
+
+# Mismo shape de configuración que el AG/PSO/BO; solo cambia el Literal
+# del algoritmo.
+class RechazaBandaRecocidoRequest(BaseModel):
+    filtro: Literal['rechaza_banda']
+    algoritmo: Literal['recocido_simulado']
+    entorno: RechazaBandaConfiguration
