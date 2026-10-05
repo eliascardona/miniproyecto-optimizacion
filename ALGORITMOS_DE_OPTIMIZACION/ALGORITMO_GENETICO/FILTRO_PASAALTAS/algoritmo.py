@@ -449,6 +449,7 @@ def guardar_resultado_json(mejor_global, mejor_fit, archivo_salida=ARCHIVO_RESUL
     componentes_optimizados = [
         {
             "nombre": comp["nombre"],
+            "nodos": comp["nodos"],
             "valor": (SERIE_E12 if comp["tipo"] == "R" else SERIE_E6)[mejor_global[i]],
         }
         for i, comp in enumerate(COMPONENTES_AG)

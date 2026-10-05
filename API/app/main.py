@@ -5,8 +5,8 @@ from app.routes.unique_entrypoint import unique_entrypoint
 
 def create_app() -> FastAPI:
     app = FastAPI(
-        title="Optimización de circuitos",
-        description="Mini proyecto de investigación UAA 2026",
+        title="API CON ALGORITMOS DE OPTIMIZACIÓN EN EL DISEÑO DE FILTROS ANALÓGICOS",
+        description="UNIVERSIDAD AUTÓNOMA DE AGUASCALIENTES Mini proyecto MP-26-154",
         version="1.0.0",
     )
 

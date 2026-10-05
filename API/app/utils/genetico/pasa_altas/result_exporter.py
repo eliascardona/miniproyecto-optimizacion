@@ -126,6 +126,7 @@ def guardar_resultado_json(
         {
             "nombre": comp["nombre"],
             "tipo": comp["tipo"],
+            "nodos": comp["nodos"],
             "valor": float((SERIE_E12 if comp["tipo"] == "R" else SERIE_E6)[mejor_global[i]]),
             "conexion_tierra": comp["es_shunt"],
         }
