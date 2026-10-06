@@ -67,27 +67,34 @@ class IndividualOptimizationController:
 
         service = service_class()
 
-        circuit_config = service.validate_json_config(request.entorno)
-        componentes = service.extract_components()
-
+        # Cada servicio trabaja en su propio directorio temporal (ver
+        # ConstantsRepository). Se borra SIEMPRE al terminar la petición,
+        # salga bien o mal: el resultado ya trae la gráfica codificada en
+        # base64 y no depende de ningún archivo del directorio.
         try:
-            result = service.run_optimization(cfg=circuit_config, componentes_ag=componentes)
-        except ValueError as e:
-            # Típicamente: parametros_optimizador o frecuencias traen las
-            # claves de otro filtro/algoritmo (ver GeneticPreparationService._buscar
-            # y sus equivalentes en ParticleSwarmPreparationService/
-            # BayesianPreparationService). Es un problema del request, no
-            # del servidor -> 422, no 500.
-            raise HTTPException(status_code=422, detail=str(e))
-        except RuntimeError as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            circuit_config = service.validate_json_config(request.entorno)
+            componentes = service.extract_components()
 
-        # Algunos algoritmos (hoy: optimización bayesiana) agregan
-        # tiempo_ejecucion_s al resultado; el resto no lo trae. Se decide
-        # aquí, según lo que el resultado realmente contenga, en vez de
-        # preguntarle al service_class qué tipo es -- así un futuro
-        # algoritmo que también reporte tiempo no necesita ningún cambio
-        # en este método.
-        if "tiempo_ejecucion_s" in result:
-            return CircuitoOptimizadoConTiempoResponse(**result)
-        return CircuitoOptimizadoResponse(**result)
+            try:
+                result = service.run_optimization(cfg=circuit_config, componentes_ag=componentes)
+            except ValueError as e:
+                # Típicamente: parametros_optimizador o frecuencias traen las
+                # claves de otro filtro/algoritmo (ver GeneticPreparationService._buscar
+                # y sus equivalentes en ParticleSwarmPreparationService/
+                # BayesianPreparationService). Es un problema del request, no
+                # del servidor -> 422, no 500.
+                raise HTTPException(status_code=422, detail=str(e))
+            except RuntimeError as e:
+                raise HTTPException(status_code=500, detail=str(e))
+
+            # Algunos algoritmos (hoy: optimización bayesiana) agregan
+            # tiempo_ejecucion_s al resultado; el resto no lo trae. Se decide
+            # aquí, según lo que el resultado realmente contenga, en vez de
+            # preguntarle al service_class qué tipo es -- así un futuro
+            # algoritmo que también reporte tiempo no necesita ningún cambio
+            # en este método.
+            if "tiempo_ejecucion_s" in result:
+                return CircuitoOptimizadoConTiempoResponse(**result)
+            return CircuitoOptimizadoResponse(**result)
+        finally:
+            service.constants_repository.cleanup()

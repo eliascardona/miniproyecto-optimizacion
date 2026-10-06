@@ -6,6 +6,7 @@ No guarda estado; recibe todo lo que necesita como argumentos.
 """
 import subprocess
 from pathlib import Path
+from typing import Sequence
 
 from app.utils.genetico.commercial_series import SERIE_E6, SERIE_E12
 from app.utils.spice_formatter import valor_spice, valor_frecuencia
@@ -71,10 +72,26 @@ def actualizar_circuito(
     Path(archivo_cir).write_text("\n".join(lineas))
 
 
-def ejecutar_spice(ngspice_exe: str, archivo_cir: str) -> bool:
-    """Lanza ngspice en modo batch y devuelve True si el código de retorno es 0."""
+def ejecutar_spice(ngspice_exe: "str | Sequence[str]", archivo_cir: str) -> bool:
+    """
+    Lanza ngspice en modo batch y devuelve True si el código de retorno es 0.
+
+    ngspice se ejecuta con el DIRECTORIO DEL .cir como directorio de trabajo
+    (cwd). Es necesario porque el .cir pide `wrdata datos_filtro.txt` y
+    `write simulacion.raw` con rutas RELATIVAS, y ngspice las resuelve contra
+    el cwd del proceso, no contra la carpeta del netlist. Sin el cwd explícito,
+    esos archivos caían en el directorio desde el que se arrancó uvicorn,
+    mientras el fitness leía el datos_filtro.txt de otra carpeta (desfasado).
+
+    `ngspice_exe` puede ser una ruta (str) o una lista de argumentos (p. ej.
+    [sys.executable, "ngspice_falso.py"]); lo segundo permite probar este
+    flujo sin tener ngspice instalado.
+    """
+    ruta_cir = Path(archivo_cir).resolve()
+    prefijo = [ngspice_exe] if isinstance(ngspice_exe, str) else list(ngspice_exe)
     resultado = subprocess.run(
-        [ngspice_exe, "-b", archivo_cir],
+        [*prefijo, "-b", str(ruta_cir)],
+        cwd=str(ruta_cir.parent),
         capture_output=True,
         text=True,
     )
