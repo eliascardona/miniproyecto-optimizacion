@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Request
-from API.app.controller.individual_optimization_controller import IndividualOptimizationController
+from app.controller.individual_optimization_controller import IndividualOptimizationController
 from app.pydantic_schema.api_request_schema.circuit_optimization_request import CircuitOptimizationRequest
 
 

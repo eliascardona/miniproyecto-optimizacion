@@ -10,6 +10,8 @@ from pathlib import Path
 
 import numpy as np
 
+from app.utils.matplotlib_seguro import serializado
+
 from app.utils.genetico.commercial_series import SERIE_E6, SERIE_E12
 from app.utils.genetico.pasa_altas.metrics import calcular_metricas_fc, calcular_metricas_paso_aten
 
@@ -18,6 +20,7 @@ from app.utils.genetico.pasa_altas.metrics import calcular_metricas_fc, calcular
 # Gráfica
 # ---------------------------------------------------------------------------
 
+@serializado
 def graficar_resultado(
     archivo_datos: str,
     archivo_salida: str,
@@ -31,7 +34,7 @@ def graficar_resultado(
 ) -> None:
     """Genera la gráfica de respuesta en frecuencia y la guarda en archivo_salida."""
     try:
-        import matplotlib.pyplot as plt
+        from matplotlib.figure import Figure
     except ImportError:
         print("[AVISO] No se pudo graficar: falta instalar matplotlib.")
         return
@@ -45,7 +48,10 @@ def graficar_resultado(
     frecuencias = datos[:, 0]
     amplitudes = datos[:, 1]
 
-    fig, ax = plt.subplots(figsize=(8, 5))
+    # Figure directa (no pyplot): sin registro global de figuras ni backend
+    # interactivo, seguro para los hilos de FastAPI y sin fugas de memoria.
+    fig = Figure(figsize=(8, 5))
+    ax = fig.subplots()
 
     if modo == "BASICO":
         fc_real, amp_max, _, _ = calcular_metricas_fc(archivo_datos)

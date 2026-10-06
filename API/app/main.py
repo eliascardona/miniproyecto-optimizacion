@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from API.app.routes.individual_optimization_router import individual_optimization_router
+from app.routes.individual_optimization_router import individual_optimization_router
 
 
 def create_app() -> FastAPI:
