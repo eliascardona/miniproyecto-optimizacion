@@ -32,31 +32,42 @@ def limpiar_cache() -> None:
     _esquema_base_json.cache_clear()
 
 
-def _aplicar_valores(esquema: dict, valores: Mapping[str, float], filtro: str) -> None:
+def _aplicar_valores(esquema: dict, valores: Mapping[str, float], filtro: str, estricto: bool = True) -> None:
     por_nombre = {}
     for entrada in (*esquema["elementos"], *esquema["alimentacion"]):
         por_nombre[entrada["nombre"].lower()] = entrada
     for nombre, valor in valores.items():
         entrada = por_nombre.get(str(nombre).lower())
         if entrada is None:
+            if not estricto:
+                continue
             raise EsquemaError(f"El esquema de '{filtro}' no tiene un componente llamado '{nombre}'.")
         if not isinstance(valor, (int, float)) or not math.isfinite(valor):
             raise EsquemaError(f"Valor inválido para '{nombre}': {valor!r}")
         entrada["valor"] = float(valor)
 
 
-def obtener_esquema(filtro: str, valores: Mapping[str, float] | None = None) -> dict:
+def obtener_esquema(
+    filtro: str,
+    valores: Mapping[str, float] | None = None,
+    valores_opcionales: Mapping[str, float] | None = None,
+) -> dict:
     """
     Esquema del filtro, listo para serializar a JSON.
 
     `valores` (opcional) reemplaza el valor de componentes por nombre
-    (p. ej. los R/C optimizados y Vs/Rs/Rl/Vpp/Vnn de la petición); un nombre
-    que no exista en el esquema es un error (así se detecta cualquier
-    desfase entre el optimizador y el dibujo).
+    (p. ej. los R/C optimizados); un nombre que no exista en el esquema es un
+    error (así se detecta cualquier desfase entre el optimizador y el dibujo).
+
+    `valores_opcionales` hace lo mismo pero IGNORA los nombres que el esquema
+    no tenga (p. ej. Vpp/Vnn en un circuito pasivo): sirve para los datos del
+    entorno de la petición (Vs, Rs, Rl, Vpp, Vnn).
     """
     ruta = ConstantsRepository.plantilla_cir(filtro)
     esquema = json.loads(_esquema_base_json(ruta, Path(ruta).stat().st_mtime_ns))
     esquema["filtro"] = filtro
     if valores:
         _aplicar_valores(esquema, valores, filtro)
+    if valores_opcionales:
+        _aplicar_valores(esquema, valores_opcionales, filtro, estricto=False)
     return esquema

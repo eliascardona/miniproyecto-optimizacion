@@ -27,6 +27,7 @@ from app.pydantic_schema.api_response_schema.circuit_response import (
     CircuitoOptimizadoConTiempoResponse,
 )
 from app.pydantic_schema.api_request_schema.circuit_optimization_request import CircuitOptimizationRequest
+from app.utils.esquema.respuesta import extras_de_respuesta
 
 
 class IndividualOptimizationController:
@@ -54,6 +55,16 @@ class IndividualOptimizationController:
         ("pasa_banda", "optimizacion_bayesiana"): PasaBandaBayesianaPreparationService,
         ("rechaza_banda", "optimizacion_bayesiana"): RechazaBandaBayesianaPreparationService,
     }
+
+    @staticmethod
+    def _extras(service, filtro: str, circuit_config: dict, result: dict) -> dict:
+        # El entorno (Vs, Rs, Rl, Vpp, Vnn) sale del MISMO _build_run_context que usó la
+        # optimización: así el esquema nunca contradice a la simulación (p. ej. Vpp = Vs + 10).
+        try:
+            entorno = service._build_run_context(circuit_config)
+        except Exception:                                    # noqa: BLE001
+            entorno = {}
+        return extras_de_respuesta(filtro, result, entorno, service.constants_repository.get_archivo_datos())
 
     def optimize(self, request: CircuitOptimizationRequest) -> CircuitoOptimizadoResponse:
         key = (request.filtro, request.algoritmo)
@@ -86,6 +97,11 @@ class IndividualOptimizationController:
                 raise HTTPException(status_code=422, detail=str(e))
             except RuntimeError as e:
                 raise HTTPException(status_code=500, detail=str(e))
+
+            # Datos extra para el cliente: esquema del circuito optimizado y curva de
+            # respuesta. Se calculan AQUÍ porque el directorio de trabajo (con el
+            # datos_filtro.txt del mejor individuo) existe hasta el `finally`.
+            result.update(self._extras(service, request.filtro, circuit_config, result))
 
             # Algunos algoritmos (hoy: optimización bayesiana) agregan
             # tiempo_ejecucion_s al resultado; el resto no lo trae. Se decide
