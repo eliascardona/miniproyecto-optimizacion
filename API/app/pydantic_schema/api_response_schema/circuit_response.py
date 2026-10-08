@@ -1,5 +1,7 @@
 from pydantic import BaseModel, Field
-from typing import List, Literal
+from typing import List, Literal, Optional
+
+from app.pydantic_schema.api_response_schema.esquema_schema import EsquemaCircuito, RespuestaFrecuencia
  
  
 class FrecuenciaObtenida(BaseModel):
@@ -26,6 +28,21 @@ class CircuitoOptimizadoResponse(BaseModel):
     )
     grafica_png_base64: str = Field(
         ..., description="Imagen de la gráfica en formato PNG codificada en Base64"
+    )
+    # --- Campos agregados (todos opcionales: los clientes anteriores los ignoran) ---
+    esquema: Optional[EsquemaCircuito] = Field(
+        None,
+        description="Esquema del circuito OPTIMIZADO (con los valores finales de cada componente), "
+                    "listo para dibujarlo. Es null si no se pudo construir (ver esquema_error).",
+    )
+    esquema_error: Optional[str] = Field(
+        None,
+        description="Por qué no hay esquema. El resto de la respuesta sigue siendo válida: "
+                    "un problema de dibujo nunca descarta una optimización terminada.",
+    )
+    respuesta_frecuencia: Optional[RespuestaFrecuencia] = Field(
+        None,
+        description="Curva de respuesta (frecuencia, Vout) del circuito optimizado.",
     )
 
 
