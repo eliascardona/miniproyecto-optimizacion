@@ -1,5 +1,7 @@
 package view;
 
+import esquema.EstiloEsquema;
+import esquema.EsquemaRenderer;
 import model.Circuit;
 import model.Element;
 
@@ -12,6 +14,16 @@ import java.io.File;
 import java.io.IOException;
 
 public class CircuitPanel extends JScrollPane {
+    /** Píxeles por unidad de rejilla del esquema vectorial (un Sallen-Key de 4.º orden mide ~760 px de ancho). */
+    public static final double ESCALA_ESQUEMA = 30;
+
+    /**
+     * Alto preferido máximo del panel cuando muestra un esquema. MainFrame es una ventana fija de
+     * 800x600 y este panel va en la zona SOUTH: sin tope, un esquema alto (p. ej. el Twin-T, ~350 px)
+     * aplastaría el gráfico y la tabla del centro. Si el esquema no cabe, aparece la barra de desplazamiento.
+     */
+    public static final int ALTO_MAXIMO_ESQUEMA = 300;
+
     public Circuit circuit;
 
     public final JLabel label;
@@ -31,16 +43,41 @@ public class CircuitPanel extends JScrollPane {
         this.setViewportView(panel);
     }
 
-    public void updateCircuit() {
-        BufferedImage image = new BufferedImage(circuit.getWidth(), circuit.getHeight(), BufferedImage.TYPE_INT_ARGB);
-        Graphics graphics = image.getGraphics();
+    @Override
+    public Dimension getPreferredSize() {
+        Dimension size = super.getPreferredSize();
+        if (circuit == null || circuit.getSchematic() == null) {
+            return size;                                   // dibujo legacy: sin cambios
+        }
+        return new Dimension(size.width, Math.min(size.height, ALTO_MAXIMO_ESQUEMA));
+    }
 
-        drawCircuit(graphics);
+    public void updateCircuit() {
+        BufferedImage image = createImage();
+
         label.setIcon(new ImageIcon(image));
         label.setSize(image.getWidth(), image.getHeight());
     }
 
     public BufferedImage getImage() {
+        return createImage();
+    }
+
+    /*
+     * Two drawing routes:
+     *   - the circuit has a schematic (it comes from the API): vector renderer; the size comes from
+     *     the schematic bounds.
+     *   - otherwise: the legacy drawing from the list of elements (unchanged).
+     */
+    private BufferedImage createImage() {
+        if (circuit.getSchematic() != null) {
+            return EsquemaRenderer.aImagen(circuit.getSchematic(),
+                    EstiloEsquema.porDefecto().conEscala(ESCALA_ESQUEMA), this.getBackground());
+        }
+        return createLegacyImage();
+    }
+
+    private BufferedImage createLegacyImage() {
         BufferedImage image = new BufferedImage(circuit.getWidth(), circuit.getHeight(), BufferedImage.TYPE_INT_ARGB);
         Graphics graphics = image.getGraphics();
 

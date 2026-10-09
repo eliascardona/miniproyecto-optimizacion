@@ -1,13 +1,14 @@
 """
 Herramienta de DESARROLLO: exporta muestras JSON REALES para probar clientes (p. ej. el frontend Java).
 
-    python -m tools.exportar_muestras DESTINO               # esquema de los 4 filtros
+    python -m tools.exportar_muestras DESTINO               # catalogo y esquema de los 4 filtros
     python -m tools.exportar_muestras DESTINO --respuesta   # ademas, una respuesta de /api/optimizar por filtro
 
-Escribe DESTINO/esquema_<filtro>.json (exactamente lo que devuelve GET /api/circuitos/<filtro>) y, con
---respuesta, DESTINO/respuesta_<filtro>.json (el cuerpo de POST /api/optimizar). La respuesta se obtiene con
-el controlador real pero con un ngspice SIMULADO (tests/_ngspice_falso.py): las curvas NO son fisicas, sirven
-solo para probar el contrato; no hace falta tener ngspice instalado.
+Escribe DESTINO/catalogo.json (exactamente lo que devuelve GET /api/catalogo), DESTINO/esquema_<filtro>.json
+(exactamente lo que devuelve GET /api/circuitos/<filtro>) y, con --respuesta, DESTINO/respuesta_<filtro>.json
+(el cuerpo de POST /api/optimizar). La respuesta se obtiene con el controlador real pero con un ngspice
+SIMULADO (tests/_ngspice_falso.py): las curvas NO son fisicas, sirven solo para probar el contrato; no hace
+falta tener ngspice instalado.
 """
 import argparse
 import json
@@ -16,7 +17,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import app.constants_repository as repositorio
+from app.controller.catalog_controller import CatalogController
 from app.controller.individual_optimization_controller import IndividualOptimizationController
+from app.pydantic_schema.api_response_schema.catalogo_esquema import CatalogoResponse
 from app.utils.esquema import obtener_esquema
 
 FILTROS = ["pasa_altas", "pasa_bajas", "pasa_banda", "rechaza_banda"]
@@ -49,6 +52,10 @@ def main() -> None:
 
     destino = Path(args.destino)
     destino.mkdir(parents=True, exist_ok=True)
+
+    print("Catalogo:")
+    # Se pasa por el modelo de respuesta, igual que hace FastAPI, para que el JSON sea el que ve el cliente.
+    _guardar(destino / "catalogo.json", CatalogoResponse.model_validate(CatalogController().get_catalog()).model_dump())
 
     print("Esquemas:")
     for filtro in FILTROS:

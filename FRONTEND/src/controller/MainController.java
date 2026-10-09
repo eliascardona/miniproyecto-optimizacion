@@ -8,7 +8,6 @@ import controller.action.SaveFrequencyTableAction;
 import controller.action.SaveFullFileAction;
 import controller.action.SaveSimulationImageAction;
 import controller.legacy.LegacyInputCircuitAction;
-import service.CircuitRequestFactory;
 import service.OptimizationService;
 import view.MainFrame;
 
@@ -42,7 +41,7 @@ public class MainController {
 
         // Circuit
         frame.generateCircuit.addActionListener(new GenerateCircuitAction(
-                frame, new OptimizationService(), new CircuitRequestFactory(), viewRefresher));
+                frame, new OptimizationService(), viewRefresher));
         frame.inputCircuit.addActionListener(new LegacyInputCircuitAction(frame, viewRefresher));
     }
 }
