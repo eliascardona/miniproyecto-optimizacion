@@ -6,23 +6,15 @@ package api_client;
  * BASE_URL / OPTIMIZE_ENDPOINT: ya ajustados por el equipo a donde corre
  * el servidor real (localhost:8082 / /api/optimizar).
  *
- * MODO_AVANZADO: literal confirmado como "AVANZADO" (antes era un
- * placeholder "PASO_ATENUACION" con un TODO pendiente de confirmar).
- *
- * IMPORTANTE — los hiperparámetros DEFAULT_* YA NO se inyectan de forma fija
- * en cada petición. Ahora son solo los valores INICIALES que se muestran en
- * los spinners de "Optimizer properties" dentro de GenerateCircuitPanel; el
- * usuario los puede cambiar antes de generar. El valor que realmente viaja
- * en cada petición se arma en dto.CircuitRequest, a partir de lo que haya en
- * esos spinners al momento de aceptar el diálogo (ver
- * MainController.construirCircuitRequest).
+ * Qué filtros, algoritmos, modos y parámetros existen YA NO se escribe aquí
+ * ni en ninguna otra parte del cliente: lo entrega el backend en
+ * GET {CATALOG_ENDPOINT} (ver catalogo.Catalogo). Por eso desaparecieron de
+ * este archivo los valores iniciales del algoritmo genético (DEFAULT_*) y
+ * los literales de modo (MODO_BASICO / MODO_AVANZADO): ahora salen del
+ * catálogo, y valen para los cuatro algoritmos y los cuatro filtros.
  */
 public final class ApiConfig {
     private ApiConfig() {}
-
-    // --- Conexión ---
-    public static final String BASE_URL = "http://localhost:8082";
-    public static final String OPTIMIZE_ENDPOINT = "/api/optimizar";
 
     // --- Contrato de negocio ---
     // FILTRO_PASA_ALTAS y ALGORITMO_GENETICO se movieron a model.TipoFiltro y
@@ -41,10 +33,18 @@ public final class ApiConfig {
     public static final int DEFAULT_ELITISMO = 3;
     public static final int DEFAULT_TORNEO_K = 3;
 
+    // --- Conexión ---
+    public static final String BASE_URL = "http://localhost:8082";
+    public static final String OPTIMIZE_ENDPOINT = "/api/optimizar";
+    /** GET {CIRCUITS_ENDPOINT}/{filtro}: esquema (dibujo) del filtro con los valores base de su plantilla. */
+    public static final String CIRCUITS_ENDPOINT = "/api/circuitos";
+    /** GET: qué filtros × algoritmos × modos existen, qué pide cada uno y con qué límites. */
+    public static final String CATALOG_ENDPOINT = "/api/catalogo";
+
     // --- Timeouts ---
     public static final int CONNECT_TIMEOUT_SECONDS = 10;
-    // El AG corre de forma síncrona en el servidor y puede tardar varios
-    // minutos según num_generaciones/tam_poblacion; por eso el timeout de
-    // la petición completa es mucho mayor que el de conexión.
+    // La optimización corre de forma síncrona en el servidor y puede tardar
+    // varios minutos según los hiperparámetros del algoritmo; por eso el
+    // timeout de la petición completa es mucho mayor que el de conexión.
     public static final int REQUEST_TIMEOUT_SECONDS = 1200;
 }

@@ -1,5 +1,7 @@
 package model;
 
+import esquema.Esquema;
+
 import java.util.ArrayList;
 
 /**
@@ -52,6 +54,13 @@ public class Circuit {
      * This variable is the width of circuit image.
      */
     private int width = 128;
+
+    /*
+     * Schematic (vector drawing description) of the circuit, when it comes from the API. It is null
+     * for circuits made of legacy elements (opened from a file, typed by hand, legacy generator).
+     * clearCircuit() and addElement() reset it, so every legacy flow goes back to the legacy drawing.
+     */
+    private Esquema schematic;
 
     public Circuit() {
         circuit = new ArrayList<>();
@@ -155,6 +164,22 @@ public class Circuit {
     }
 
     /*
+     * @return the schematic of the circuit, or null if it is drawn from legacy elements.
+     */
+    public Esquema getSchematic() {
+        return schematic;
+    }
+
+    /*
+     * It changes the value of 'schematic'
+     * @param schematic
+     *          description of the circuit to draw, or null to go back to the legacy drawing.
+     */
+    public void setSchematic(Esquema schematic) {
+        this.schematic = schematic;
+    }
+
+    /*
      * @return the width of circuit image.
      */
     public int getWidth() {
@@ -187,6 +212,8 @@ public class Circuit {
      *          it is a new element of circuit.
      */
     public void addElement(Element e) {
+        schematic = null;
+
         if(circuit.isEmpty()) {
             if(e.getNode2() != 0) {
                 width += 66;
@@ -214,6 +241,7 @@ public class Circuit {
      */
     public void clearCircuit() {
         circuit.clear();
+        schematic = null;
         width = 128;
     }
 }

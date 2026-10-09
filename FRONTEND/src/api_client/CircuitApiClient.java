@@ -1,8 +1,10 @@
 package api_client;
 
-import dto.CircuitRequest;
-import dto.ComponenteDTO;
+import catalogo.Catalogo;
+import catalogo.CatalogoParser;
 import dto.OptimizationResult;
+import dto.PeticionOptimizacion;
+import esquema.Esquema;
 
 import java.io.IOException;
 import java.net.URI;
@@ -10,29 +12,27 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.StringJoiner;
 
 /**
- * Cliente HTTP hacia la API de optimización de circuitos (FastAPI + algoritmo
- * genético en Python).
+ * Cliente HTTP hacia la API de optimización de circuitos (FastAPI + algoritmos en Python).
  *
  * Usa java.net.http.HttpClient (incluido en el JDK desde la versión 11, no
  * requiere ninguna librería externa) porque este proyecto no tiene
  * Maven/Gradle configurado.
  *
- * A partir de esta versión, este cliente YA NO conoce model.Circuit ni
- * model.IdealFilter ni model.Simulation, y YA NO lee nada de
- * ApiConfig.DEFAULT_*: todo lo que necesita para armar la petición llega
- * empaquetado en un dto.CircuitRequest, que ya trae los valores que el
- * usuario ingresó en el formulario (ver controller.MainController). Esto
- * desacopla el cliente HTTP de los modelos de Swing/dibujo del circuito.
+ * No conoce model.Circuit ni model.IdealFilter ni model.Simulation, y no
+ * sabe nada de filtros ni algoritmos concretos: pide el catálogo
+ * ({@link #obtenerCatalogo()}), optimiza lo que le describa una
+ * {@link PeticionOptimizacion} ({@link #optimizar}) y pide el dibujo base de
+ * un filtro ({@link #obtenerEsquema}). Las tres llamadas son bloqueantes:
+ * hay que hacerlas fuera del EDT (SwingWorker).
  */
 public class CircuitApiClient {
 
-    /** Se lanza cuando la API responde con error (4xx/5xx), o con un cuerpo inesperado. */
+    /** Se lanza cuando la API responde con error (4xx/5xx), no se puede alcanzar, o responde con un cuerpo inesperado. */
     public static class ApiException extends Exception {
         public ApiException(String message) {
             super(message);
@@ -44,43 +44,85 @@ public class CircuitApiClient {
     }
 
     private final HttpClient httpClient;
+    private final String baseUrl;
 
     public CircuitApiClient() {
+        this(ApiConfig.BASE_URL);
+    }
+
+    /** Constructor con URL base propia (p. ej. un servidor local en pruebas). */
+    public CircuitApiClient(String baseUrl) {
+        this.baseUrl = baseUrl;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(ApiConfig.CONNECT_TIMEOUT_SECONDS))
                 .build();
     }
 
     /**
-     * Solicita la optimización de un filtro pasa-altas Sallen-Key vía
-     * algoritmo genético, con los valores ya empaquetados en `request`.
-     *
-     * La validación de "¿el filtro seleccionado es 'High Passes'?" ya NO se
-     * hace aquí: CircuitRequest no carga el tipo de filtro (idealFilter.type)
-     * porque el JSON de salida siempre manda "filtro": "pasa_altas" fijo. Esa
-     * validación ahora vive en MainController, ANTES de construir el
-     * CircuitRequest, para fallar rápido sin abrir siquiera el diálogo de
-     * carga.
+     * Pide el catálogo (GET /api/catalogo): qué se puede optimizar y con qué parámetros.
+     * Lanza ApiException si el servidor no responde o si el catálogo es ilegible/incoherente.
      */
-    public OptimizationResult optimizarPasaAltas(CircuitRequest request) throws ApiException {
-        Map<String, Object> body = construirCuerpoPeticion(request);
-        String requestJson = MiniJsonParser.write(body);
+    public Catalogo obtenerCatalogo() throws ApiException {
+        String cuerpo = enviar(HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + ApiConfig.CATALOG_ENDPOINT))
+                .timeout(Duration.ofSeconds(ApiConfig.CONNECT_TIMEOUT_SECONDS * 3L))
+                .GET());
+        try {
+            return CatalogoParser.parse(MiniJsonParser.parse(cuerpo));
+        } catch (RuntimeException e) {
+            throw new ApiException("El catálogo recibido no tiene el formato esperado: " + e.getMessage(), e);
+        }
+    }
 
-        HttpRequest httpRequest = HttpRequest.newBuilder()
-                .uri(URI.create(ApiConfig.BASE_URL + ApiConfig.OPTIMIZE_ENDPOINT))
+    /**
+     * Optimiza el filtro con el algoritmo que describe `peticion` (POST /api/optimizar). Puede tardar
+     * minutos: el servidor corre el algoritmo completo antes de responder.
+     */
+    public OptimizationResult optimizar(PeticionOptimizacion peticion) throws ApiException {
+        String cuerpo = enviar(HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + ApiConfig.OPTIMIZE_ENDPOINT))
                 .header("Content-Type", "application/json")
-                .version(HttpClient.Version.HTTP_1_1)
                 .timeout(Duration.ofSeconds(ApiConfig.REQUEST_TIMEOUT_SECONDS))
-                .POST(HttpRequest.BodyPublishers.ofString(requestJson))
-                .build();
+                .POST(HttpRequest.BodyPublishers.ofString(MiniJsonParser.write(peticion.aCuerpo()))));
+        try {
+            return OptimizationResultParser.parse(cuerpo);
+        } catch (RuntimeException e) {
+            throw new ApiException(
+                    "La respuesta de la API no tiene el formato esperado: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Pide el esquema (dibujo) de un filtro con los valores base de su plantilla
+     * (GET /api/circuitos/{filtro}); sirve para mostrar el circuito antes de optimizar.
+     */
+    public Esquema obtenerEsquema(String filtro) throws ApiException {
+        String cuerpo = enviar(HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + ApiConfig.CIRCUITS_ENDPOINT + "/" + filtro))
+                .timeout(Duration.ofSeconds(ApiConfig.CONNECT_TIMEOUT_SECONDS * 3L))
+                .GET());
+        try {
+            return OptimizationResultParser.parseEsquema(cuerpo);
+        } catch (RuntimeException e) {
+            throw new ApiException(
+                    "El esquema recibido no tiene el formato esperado: " + e.getMessage(), e);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Transporte común
+    // ------------------------------------------------------------------
+
+    /** Envía la petición y devuelve el cuerpo si la respuesta es 2xx; si no, lanza ApiException con el motivo. */
+    private String enviar(HttpRequest.Builder constructor) throws ApiException {
+        HttpRequest peticion = constructor.version(HttpClient.Version.HTTP_1_1).build();
 
         HttpResponse<String> response;
         try {
-            response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+            response = httpClient.send(peticion, HttpResponse.BodyHandlers.ofString());
         } catch (IOException e) {
             throw new ApiException(
-                    "No se pudo conectar con la API en " + ApiConfig.BASE_URL +
-                            ". ¿Está corriendo el servidor?", e);
+                    "No se pudo conectar con la API en " + baseUrl + ". ¿Está corriendo el servidor?", e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new ApiException("La petición a la API fue interrumpida.", e);
@@ -88,115 +130,38 @@ public class CircuitApiClient {
 
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
             throw new ApiException(
-                    "La API respondió con error " + response.statusCode() + ": " + response.body());
+                    "La API respondió con error " + response.statusCode() + ": " + motivo(response.body()));
         }
+        return response.body();
+    }
 
+    /**
+     * FastAPI responde los errores como {"detail": ...}: un texto (HTTPException) o una lista de
+     * {loc, msg, ...} (validación de Pydantic). Se resume en una línea legible; si el cuerpo no tiene esa
+     * forma, se muestra tal cual.
+     */
+    static String motivo(String cuerpo) {
         try {
-            return parsearRespuesta(response.body());
-        } catch (RuntimeException e) {
-            throw new ApiException(
-                    "La respuesta de la API no tiene el formato esperado: " + e.getMessage(), e);
-        }
-    }
-
-    // ------------------------------------------------------------------
-    // Construcción del cuerpo de la petición (ahora 100% desde CircuitRequest)
-    // ------------------------------------------------------------------
-
-    private Map<String, Object> construirCuerpoPeticion(CircuitRequest request) {
-        // OJO: este "entorno" interno corresponde a PasaAltasConfiguration,
-        // que a su vez viaja dentro del campo "entorno" del request de nivel
-        // superior. El doble anidado ("entorno" dentro de "entorno") no es un
-        // error: así lo lee _build_run_context en el backend
-        // (cfg["entorno"]["v_fuente"], etc.).
-        Map<String, Object> entornoFisico = new LinkedHashMap<>();
-        entornoFisico.put("v_fuente", request.vFuente);
-        entornoFisico.put("r_fuente", request.rFuente);
-        entornoFisico.put("r_carga", request.rCarga);
-
-        Map<String, Object> barridoAc = new LinkedHashMap<>();
-        barridoAc.put("f_inicial", request.fInicial);
-        barridoAc.put("f_final", request.fFinal);
-
-        List<Object> parametrosOptimizador = new ArrayList<>();
-        parametrosOptimizador.add(claveValor("tam_poblacion", request.tamPoblacion));
-        parametrosOptimizador.add(claveValor("num_generaciones", request.numGeneraciones));
-        parametrosOptimizador.add(claveValor("prob_cruce", request.probCruce));
-        parametrosOptimizador.add(claveValor("prob_mutacion", request.probMutacion));
-        parametrosOptimizador.add(claveValor("elitismo", request.elitismo));
-        parametrosOptimizador.add(claveValor("torneo_k", request.torneoK));
-
-        List<Object> frecuencias = new ArrayList<>();
-        frecuencias.add(claveValor("f_aten", request.fAten));
-        frecuencias.add(claveValor("f_paso", request.fPaso));
-
-        Map<String, Object> pasaAltasConfiguration = new LinkedHashMap<>();
-        pasaAltasConfiguration.put("modo", request.modo);
-        pasaAltasConfiguration.put("entorno", entornoFisico);
-        pasaAltasConfiguration.put("barrido_ac", barridoAc);
-        pasaAltasConfiguration.put("parametros_optimizador", parametrosOptimizador);
-        pasaAltasConfiguration.put("frecuencias", frecuencias);
-
-        Map<String, Object> peticion = new LinkedHashMap<>();
-        peticion.put("algoritmo", request.algoritmo);
-        peticion.put("filtro", request.filtro);
-        peticion.put("entorno", pasaAltasConfiguration);
-        return peticion;
-    }
-
-    private Map<String, Object> claveValor(String clave, Object valor) {
-        Map<String, Object> item = new LinkedHashMap<>();
-        item.put("clave", clave);
-        item.put("valor", valor);
-        return item;
-    }
-
-    // ------------------------------------------------------------------
-    // Parseo de la respuesta (sin cambios)
-    // ------------------------------------------------------------------
-
-    @SuppressWarnings("unchecked")
-    private OptimizationResult parsearRespuesta(String json) {
-        Map<String, Object> root = MiniJsonParser.parseObject(json);
-
-        OptimizationResult result = new OptimizationResult();
-        result.fitness = numero(root.get("fitness"), "fitness");
-
-        List<Object> frecuenciasObtenidas = (List<Object>) root.get("frecuencias_obtenidas");
-        if (frecuenciasObtenidas != null) {
-            for (Object item : frecuenciasObtenidas) {
-                Map<String, Object> par = (Map<String, Object>) item;
-                String clave = (String) par.get("clave");
-                double valor = numero(par.get("valor"), "frecuencias_obtenidas[].valor");
-                result.frecuenciasObtenidas.put(clave, valor);
+            Object detalle = MiniJsonParser.parseObject(cuerpo).get("detail");
+            if (detalle instanceof String texto) {
+                return texto;
             }
-        }
-
-        List<Object> componentesOptimizados = (List<Object>) root.get("componentes_optimizados");
-        List<ComponenteDTO> componentes = new ArrayList<>();
-        if (componentesOptimizados != null) {
-            for (Object item : componentesOptimizados) {
-                Map<String, Object> c = (Map<String, Object>) item;
-
-                ComponenteDTO dto = new ComponenteDTO();
-                dto.nombre = (String) c.get("nombre");
-                dto.tipo = (String) c.get("tipo");
-                dto.valor = numero(c.get("valor"), "componentes_optimizados[].valor");
-                dto.conexionTierra = Boolean.TRUE.equals(c.get("conexion_tierra"));
-                componentes.add(dto);
+            if (detalle instanceof List<?> errores && !errores.isEmpty()) {
+                StringJoiner union = new StringJoiner("; ");
+                for (Object error : errores) {
+                    if (error instanceof Map<?, ?> m && m.get("msg") != null) {
+                        Object ubicacion = m.get("loc");
+                        union.add((ubicacion instanceof List<?> l ? String.join(".", l.stream().map(String::valueOf).toList()) + ": " : "")
+                                + m.get("msg"));
+                    } else {
+                        union.add(String.valueOf(error));
+                    }
+                }
+                return union.toString();
             }
+        } catch (RuntimeException ignorada) {
+            // No era JSON o no tenía "detail": se devuelve el cuerpo crudo.
         }
-        result.componentesOptimizados = componentes;
-
-        result.graficaPngBase64 = (String) root.get("grafica_png_base64");
-
-        return result;
-    }
-
-    private double numero(Object value, String campo) {
-        if (!(value instanceof Number)) {
-            throw new IllegalArgumentException("Se esperaba un número en '" + campo + "' y llegó: " + value);
-        }
-        return ((Number) value).doubleValue();
+        return cuerpo;
     }
 }

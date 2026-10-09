@@ -1,5 +1,7 @@
 package dto;
 
+import esquema.Esquema;
+
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,4 +32,14 @@ public class OptimizationResult {
     public List<ComponenteDTO> componentesOptimizados;
 
     public String graficaPngBase64;
+
+    /**
+     * Esquema (dibujo) del circuito OPTIMIZADO, con los valores finales de cada componente. Es null si
+     * el backend no lo envió (versión anterior) o no se pudo construir/interpretar; en ese caso el
+     * circuito se dibuja con el camino legacy y {@link #esquemaError} explica por qué.
+     */
+    public Esquema esquema;
+
+    /** Motivo por el que no hay {@link #esquema} (null si lo hay o si el backend no dijo nada). */
+    public String esquemaError;
 }

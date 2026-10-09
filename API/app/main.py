@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 
+from app.routes.catalog_router import catalog_router
 from app.routes.circuit_schema_router import circuit_schema_router
 from app.routes.individual_optimization_router import individual_optimization_router
 
@@ -13,6 +14,7 @@ def create_app() -> FastAPI:
 
     app.include_router(individual_optimization_router)
     app.include_router(circuit_schema_router)
+    app.include_router(catalog_router)
 
     return app
 
